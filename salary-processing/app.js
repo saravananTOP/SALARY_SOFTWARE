@@ -3,29 +3,50 @@
 
     const appShell = document.getElementById('app-shell');
     const loginGate = document.getElementById('login-gate');
-    const loginButton = document.getElementById('google-login');
+    const loginForm = document.getElementById('login-form');
+    const loginButton = document.getElementById('login-button');
     const loginMessage = document.getElementById('login-message');
     const loginError = document.getElementById('login-error');
-    const googleRun = typeof google !== 'undefined' && google.script && google.script.run;
+    let csrfToken = null;
+
+    async function apiRequest(url, options = {}) {
+        const method = options.method || 'GET';
+        const headers = { ...(options.headers || {}) };
+        if (options.body !== undefined && !(options.body instanceof Blob)
+            && !Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+            headers['Content-Type'] = 'application/json';
+        }
+        if (method !== 'GET' && csrfToken) headers['X-CSRF-Token'] = csrfToken;
+        const response = await fetch(url, {
+            ...options,
+            method,
+            headers,
+            credentials: 'same-origin'
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || 'The portal request failed.');
+        return body;
+    }
 
     function showLoginError(error) {
         appShell.hidden = true;
         loginGate.hidden = false;
         loginButton.disabled = false;
-        loginButton.textContent = 'Try Google account access again';
-        loginMessage.textContent = 'Access could not be verified. Sign in with a Google account that has permission to open the payroll spreadsheet, then try again.';
-        loginError.textContent = error?.message || 'The portal could not load authorized payroll data. Ask the spreadsheet owner to check access and setup; no employee data was loaded.';
+        loginButton.textContent = 'Sign in';
+        loginMessage.textContent = 'Use the local account provided by your payroll portal administrator.';
+        loginError.textContent = error?.message || 'The portal could not load payroll data. No employee data was displayed.';
         loginError.hidden = false;
     }
 
     function initialize(source) {
-        if (!source || source.mode !== 'google-sheets'
+        if (!source || source.mode !== 'sqlite'
             || !Array.isArray(source.companies) || !Array.isArray(source.employees)) {
-            showLoginError(new Error('The portal did not return verified Google Sheets data. No payroll data was loaded.'));
+            showLoginError(new Error('The portal did not return valid payroll data. No employee data was displayed.'));
             return;
         }
         appShell.hidden = false;
         loginGate.hidden = true;
+        loginError.hidden = true;
 
     const isConnected = true;
     const companies = source.companies.map((company) => ({ ...company }));
@@ -35,7 +56,7 @@
     const selectedIds = new Set();
     const companyById = new Map(companies.map((company) => [company.id, company]));
     const colors = ['#eeeafd', '#e4f3ed', '#fff0e2', '#e8effc', '#f9e9ee', '#f0eafa', '#e5f3f4', '#fff2df'];
-    const registerTabs = [
+    const registerNames = [
         'Company Master',
         'Employee Master - FA',
         'Employee Master - FR',
@@ -62,6 +83,8 @@
     let currentRegisterStart = 5;
     let registerLoading = false;
     let editingId = null;
+    let fixedDataEmployeeId = null;
+    let attendancePreviewRows = null;
     let filteredPayrollEmployees = [];
     let filteredDirectoryEmployees = [];
 
@@ -118,7 +141,7 @@
     }
 
     function updateCompanyFilters() {
-        ['employee-company-filter', 'payroll-company-filter', 'attendance-company-filter'].forEach((id) => {
+        ['employee-company-filter', 'payroll-company-filter', 'attendance-company-filter', 'data-review-company'].forEach((id) => {
             const select = byId(id);
             const value = select.value;
             fillCompanyOptions(select);
@@ -136,11 +159,13 @@
         companies.forEach((company, index) => {
             const staff = employees.filter((employee) => employee.companyId === company.id);
             const summary = source.companyTotals?.find((item) => item.companyId === company.id);
-            const pay = summary ? summary.grossSalary : staff.reduce((sum, employee) => sum + employee.baseSalary, 0);
+            const pay = summary ? summary.grossSalary : staff.some((employee) => employee.baseSalary == null)
+                ? null
+                : staff.reduce((sum, employee) => sum + employee.baseSalary, 0);
             const card = node('article', `company-card company-color-${index % 2}`);
             const marker = node('span', 'company-marker', company.shortName.slice(0, 1));
             const details = node('span', 'company-card-details');
-            details.append(node('strong', '', company.name), node('small', '', `${staff.length} employees · ${pay == null ? 'Review source formulas' : money(pay)} gross payroll`));
+            details.append(node('strong', '', company.name), node('small', '', `${staff.length} employees · ${pay == null ? 'Review source data before payroll' : `${money(pay)} gross payroll`}`));
             card.append(marker, details, node('span', 'company-card-arrow', '↗'));
             container.append(card);
         });
@@ -149,7 +174,9 @@
     function renderDashboard() {
         const totalPay = source.companyTotals
             ? source.companyTotals.reduce((sum, company) => sum + (company.grossSalary || 0), 0)
-            : employees.reduce((sum, employee) => sum + employee.baseSalary, 0);
+            : employees.some((employee) => employee.baseSalary == null)
+                ? 0
+                : employees.reduce((sum, employee) => sum + employee.baseSalary, 0);
         const totalsNeedReview = source.companyTotals?.some((company) => company.grossSalary == null);
         const activeCount = employees.filter((employee) => staffType(employee) === 'active').length;
         const retainerCount = employees.length - activeCount;
@@ -165,59 +192,65 @@
         byId('metric-pay').textContent = totalsNeedReview
             ? 'Review source'
             : money(totalPay);
+        byId('metric-pay').classList.toggle('metric-value-review', Boolean(totalsNeedReview));
         byId('metric-runs').textContent = payrollRuns.length;
         byId('metric-attendance').textContent = String(workDays);
         byId('top-period').textContent = period;
         byId('pay-period').value = monthInput;
         document.querySelector('.chart-foot > span').textContent = `${period} · INR`;
         document.querySelector('.metric-card:nth-child(2) .metric-top > span').textContent = 'MONTHLY GROSS PAY';
-        document.querySelector('.metric-card:nth-child(2) small').textContent = 'From the source Salary Register';
+        document.querySelector('.metric-card:nth-child(2) small').textContent = 'Calculated from current payroll inputs';
         document.querySelector('.metric-card:nth-child(4) .metric-top > span').textContent = 'REPORTED WORK DAYS';
-        document.querySelector('.metric-card:nth-child(4) small').textContent = 'Reported in the current Attendance sheet';
+        document.querySelector('.metric-card:nth-child(4) small').textContent = 'Reported in current-period portal attendance';
         byId('employee-nav-count').textContent = employees.length;
         if (isConnected) {
             document.querySelector('#view-employees thead th:nth-child(4)').textContent = 'AGE AT JOINING';
             document.querySelector('#view-payroll thead th:nth-child(4)').textContent = 'AGE AT JOINING';
-            byId('workspace-status').textContent = 'Google account verified';
+            byId('workspace-status').textContent = 'Local account signed in';
             byId('logout-button').hidden = false;
-            byId('account-button').textContent = initials(source.userEmail || 'Google');
-            byId('account-button').title = 'Sign out of the portal; your Google account remains signed in';
+            byId('account-button').textContent = initials(source.userEmail || 'User');
+            byId('account-button').title = 'Sign out of the payroll portal';
             byId('account-button').setAttribute('aria-label', 'Sign out of Employees Pay Roll');
-            byId('logout-button').title = 'Signs out of this portal only, not your Google account';
-            document.querySelector('.profile-name strong').textContent = source.userEmail || 'Google account';
-            document.querySelector('.profile-name small').textContent =
-                source.canRevealSensitive ? 'Portal administrator' : 'Authorized account';
-            document.querySelector('.profile-avatar').textContent = initials(source.userEmail || 'Google');
+            byId('logout-button').title = 'Signs out of the payroll portal';
+            byId('profile-email').textContent = source.userEmail || 'Portal account';
+            document.querySelector('.profile-name small').textContent = ({
+                admin: 'Portal administrator',
+                payroll: 'Payroll user',
+                'read-only': 'Read-only user'
+            })[source.userRole] || 'Local account';
+            document.querySelector('.profile-avatar').textContent = initials(source.userEmail || 'User');
             document.querySelector('.profile-more').hidden = true;
             document.querySelector('#view-dashboard .welcome-row h1').textContent = 'Payroll overview';
             document.querySelector('#view-dashboard .welcome-row .eyebrow').textContent = 'CURRENT PAYROLL PERIOD · WORKSPACE OVERVIEW';
             document.querySelector('.quick-actions #quick-add-employee').hidden = true;
-            document.querySelector('.quick-actions [data-go="attendance"] small').textContent = 'Review current workbook attendance inputs';
-            document.querySelector('#view-dashboard .metric-card:nth-child(3) small').textContent = 'Archived payroll groups from workbook history';
+            byId('data-review-nav').hidden = !source.canManageEmployeeData;
+            byId('quick-review-source-data').hidden = !source.canManageEmployeeData || !source.dataReview?.pendingCount;
+            document.querySelector('.quick-actions [data-go="attendance"] small').textContent = 'Review current payroll-period inputs';
+            document.querySelector('#view-dashboard .metric-card:nth-child(3) small').textContent = 'Archived payroll runs stored in SQLite';
             document.querySelector('#view-dashboard .payroll-overview .panel-title-row p').textContent = 'Current gross salary by company';
             document.querySelector('#view-dashboard .chart-caption').lastChild.textContent = ' Gross salary';
             document.querySelector('#view-dashboard .recent-panel .panel-title-row p').textContent =
-                'Archived payroll history from the source workbook';
+                'Archived payroll history stored in SQLite';
             document.querySelector('#view-dashboard .notice-bar span:nth-child(2)').textContent =
-                'Connected to your authorized Google Sheet. Payroll previews use its calculated Salary Register; no bank payments are initiated.';
+                'Payroll records and calculations are stored locally in SQLite. Payroll previews do not initiate payments.';
             document.querySelector('#view-employees .subheading').textContent =
-                'Employee records loaded from the protected Google Sheet. Sensitive identifiers and bank/contact fields are masked; full values require configured administrator access.';
-            document.querySelector('#view-payroll .subheading').textContent = 'Select employees manually; the portal previews only their calculated source register values.';
+                'Employee records are stored in the portal database. Sensitive identifiers are masked; full values require administrator access.';
+            document.querySelector('#view-payroll .subheading').textContent = 'Select employees manually to calculate a local payroll preview.';
             document.querySelector('#view-payroll .notice-bar span:nth-child(2)').textContent =
-                'Source-sheet preview. Gross, deductions and net use the spreadsheet formulas for selected employees only. No payment is made.';
+                'Gross, deductions and net are calculated from the approved payroll rules for selected employees. No payment is made.';
             document.querySelector('#view-payroll .panel-title-row .section-tag').textContent = 'SELECTED ONLY';
             document.querySelector('#view-payroll .metric-card:nth-child(3) .metric-top > span').textContent = 'SELECTED BASE PAY';
             document.querySelector('#view-payroll .metric-card:nth-child(3) small').textContent =
-                'Reference only; preview uses calculated register values';
+                'Reference amount for the selected employees';
             document.querySelector('#view-payroll .runs-panel .panel-title-row p').textContent =
-                'Archived payroll groups read from Payroll History';
+                'Archived payroll groups from SQLite history';
             document.querySelector('#view-payroll .run-footer > span').textContent =
                 'This prepares a selected-employee preview only. Nothing is archived or paid.';
             byId('pay-period').disabled = true;
-            document.querySelector('#view-attendance .subheading').textContent = 'Monthly attendance inputs, leave balances, LOP and late-deduction calculations from the source sheet.';
-            document.querySelector('#view-attendance .page-heading .section-tag').textContent = 'LIVE SHEET';
+            document.querySelector('#view-attendance .subheading').textContent = 'Monthly attendance inputs, leave balances and locally calculated loss of pay.';
+            document.querySelector('#view-attendance .page-heading .section-tag').textContent = 'SQLITE';
             document.querySelector('#view-attendance .notice-bar span:nth-child(2)').textContent =
-                'Attendance input edits are restricted to workbook input columns; formula-driven LOP and leave calculations remain in Google Sheets.';
+                'Update only the monthly inputs documented in the payroll Read Me. Leave usage and loss of pay are calculated in the portal.';
             document.querySelector('#view-attendance .metric-card:first-child .metric-top > span').textContent = 'REPORTED WORK DAYS';
             document.querySelector('#view-attendance .metric-card:first-child small').textContent = 'Sum of work days currently listed in the Attendance tab';
             document.querySelector('#view-attendance .metric-card:nth-child(2) .metric-top > span').textContent = 'LEAVE REQUEST INBOX';
@@ -227,46 +260,57 @@
             document.querySelector('#view-reports .notice-bar span:nth-child(2)').textContent =
                 'Exports contain authorized employee and payroll data. Handle downloaded files as confidential and store them securely.';
             document.querySelector('#view-reports .report-card:first-child p').textContent =
-                'Payroll summaries from the workbook’s current report registers.';
+                'Payroll summaries calculated from local payroll data.';
             document.querySelector('#view-reports .report-card:nth-child(2) p').textContent =
                 'Authorized employee directory details and salary fields.';
             document.querySelector('#view-reports .report-card:nth-child(3) p').textContent =
-                'Archived payroll history read from the source workbook.';
+                'Archived payroll history stored in SQLite.';
             document.querySelector('#view-reports .report-breakdown .panel-title-row p').textContent =
-                'Payroll register totals in Indian rupees; review flagged formula errors in the source workbook.';
-            document.querySelector('#view-settings .subheading').textContent = `Authenticated Google account: ${source.userEmail || 'verified'} · Source of truth: protected Google Sheet.`;
-            const sourceLink = byId('source-workbook-link');
-            sourceLink.href = source.sourceSpreadsheetUrl || '#';
-            sourceLink.hidden = !source.sourceSpreadsheetUrl;
-            const settingsPanels = document.querySelectorAll('#view-settings .settings-panel');
-            settingsPanels[0].querySelector('.panel-title-row p').textContent = 'Companies represented in the authorized employee masters';
-            settingsPanels[1].querySelector('.panel-title-row h2').textContent = 'Payroll source and workflow';
-            settingsPanels[1].querySelector('.panel-title-row p').textContent = 'Workbook calculations remain the source of truth.';
-            const ruleDescriptions = settingsPanels[1].querySelectorAll('.settings-rules dd');
+                'Payroll register totals in Indian rupees, calculated by the portal.';
+            document.querySelector('#view-settings .subheading').textContent = `Signed in as ${source.userEmail || 'portal user'} · Payroll data is stored in SQLite.`;
+            const companyPanel = byId('settings-companies').closest('.settings-panel');
+            companyPanel.querySelector('.panel-title-row p').textContent = 'Companies represented in the imported employee records';
+            const workflowPanel = document.querySelector('#view-settings .settings-rules').closest('.settings-panel');
+            workflowPanel.querySelector('.panel-title-row h2').textContent = 'Payroll rules and workflow';
+            workflowPanel.querySelector('.panel-title-row p').textContent = 'The payroll Read Me defines the rules; SQLite stores the operating data.';
+            const ruleDescriptions = workflowPanel.querySelectorAll('.settings-rules dd');
             const hasJoiningAge = employees.some((employee) => Number.isInteger(employee.ageAtJoining));
             ruleDescriptions[1].textContent = hasJoiningAge
                 ? 'Calculated server-side from date of birth when present; otherwise uses the employee master group'
                 : 'Staff type follows the employee master; age at joining is not stored';
-            ruleDescriptions[2].textContent = 'Selected employees only; gross, deductions and net use the source register';
-            ruleDescriptions[3].textContent = 'Calculated by workbook formulas; verify the source sheet';
-            ruleDescriptions[4].textContent = 'Employee and payroll records stay in the authorized Google Sheet; portal previews are not archived';
+            ruleDescriptions[2].textContent = 'Selected employees only; gross, deductions and net are calculated locally';
+            ruleDescriptions[3].textContent = 'Calculated in the portal from the configured statutory settings';
+            ruleDescriptions[4].textContent = 'Employee records, payroll results and archive history are stored in SQLite';
             ruleDescriptions[5].textContent = source.periodLabel || source.payrollPeriod || 'Not set';
             ruleDescriptions[6].textContent = String(source.calendarDays || 'Not set');
             byId('add-employee-button').hidden = true;
             document.querySelector('#view-employees .classification-note').textContent =
                 hasJoiningAge
                     ? 'Age at joining is calculated server-side where date of birth is present; otherwise staff type follows the employee master group.'
-                    : 'Staff type follows the employee master group; age at joining is not stored in this workbook.';
+                    : 'Staff type follows the imported employee master group; age at joining is not stored.';
             document.querySelector('#view-employees .metric-card:nth-child(2) small').textContent = 'Classification from the employee master';
             document.querySelector('#view-employees .metric-card:nth-child(3) small').textContent = 'Classification from the employee master';
-            document.querySelector('.app-footer > span:last-child').textContent = 'Google Sheets source · Amounts in INR';
-            const warningBar = document.querySelector('#view-dashboard .notice-bar');
-            if (source.warnings?.length) {
-                const details = source.warnings.slice(0, 3).join(' ');
-                const remaining = source.warnings.length > 3 ? ` ${source.warnings.length - 3} more item(s) need review.` : '';
-                const warning = node('span', 'server-warning', `${source.warnings.length} source-sheet item(s) need review. ${details}${remaining}`);
-                warningBar.append(warning);
+            document.querySelector('.app-footer > span:last-child').textContent = 'SQLite payroll data · Amounts in INR';
+            const warningBar = byId('dashboard-review-notice');
+            if (source.dataReview?.pendingCount && source.canManageEmployeeData) {
+                byId('dashboard-review-link').hidden = false;
+            } else {
+                byId('dashboard-review-link').hidden = true;
             }
+            warningBar.hidden = !source.warnings?.length;
+            const reviewSummary = source.dataReview?.pendingCount
+                ? `${source.dataReview.pendingCount} employee records need verified salary or leave data. `
+                : '';
+            const historyWarning = source.warnings?.find((message) => message.includes('Payroll history rows'));
+            byId('dashboard-review-message').textContent =
+                `${reviewSummary}${historyWarning || (source.warnings?.join(' ') ?? '')}`;
+            const payrollSourcesIncomplete = employees.some((employee) =>
+                employee.status === 'active' && (employee.salaryDataMissing || employee.leaveDataMissing));
+            byId('payroll-source-warning').hidden = !payrollSourcesIncomplete;
+            byId('payroll-source-review-link').hidden = !source.canManageEmployeeData;
+            byId('payroll-source-warning-message').textContent = source.canManageEmployeeData
+                ? 'Complete verified salary and leave data for active employees before including them in payroll.'
+                : 'Ask a portal administrator to verify incomplete salary and leave data before preparing payroll.';
         }
         updateRegisterOptions();
         renderCompanyCards();
@@ -280,14 +324,19 @@
         chart.replaceChildren();
         const values = companies.map((company) => {
             const summary = source.companyTotals?.find((item) => item.companyId === company.id);
-            return summary ? summary.grossSalary : employees.filter((employee) => employee.companyId === company.id)
-                .reduce((sum, employee) => sum + employee.baseSalary, 0);
+            const group = employees.filter((employee) => employee.companyId === company.id);
+            return summary ? summary.grossSalary : group.some((employee) => employee.baseSalary == null)
+                ? null
+                : group.reduce((sum, employee) => sum + employee.baseSalary, 0);
         }).filter((value) => value != null);
         const maxPay = Math.max(...values, 1);
         companies.forEach((company) => {
             const companyEmployees = employees.filter((employee) => employee.companyId === company.id);
             const summary = source.companyTotals?.find((item) => item.companyId === company.id);
-            const total = summary ? summary.grossSalary : companyEmployees.reduce((sum, employee) => sum + employee.baseSalary, 0);
+            const total = summary ? summary.grossSalary
+                : companyEmployees.some((employee) => employee.baseSalary == null)
+                    ? null
+                    : companyEmployees.reduce((sum, employee) => sum + employee.baseSalary, 0);
             const group = node('div', 'chart-group');
             const amount = node('strong', 'chart-amount', total == null ? 'Review source' : money(total));
             const bar = node('div', 'chart-bar-track');
@@ -304,7 +353,7 @@
         const rows = [...payrollRuns].slice(0, limit);
         if (!rows.length) {
             container.append(node('p', 'empty-state', isConnected
-                ? 'No archived payroll history was found in the source workbook.'
+                ? 'No archived payroll history was found in SQLite.'
                 : 'No payroll previews have been prepared in this session.'));
             return;
         }
@@ -347,7 +396,18 @@
             statusCell.append(tag(employee.status === 'on-leave' ? 'On leave' : 'Active', employee.status === 'on-leave' ? 'on-leave' : 'active'));
             cell(row, employee.baseSalary == null ? 'Review source' : money(employee.baseSalary), 'align-right amount-cell');
             const action = cell(row, '');
-            if (isConnected) {
+            if (source.canManageEmployeeData) {
+                const details = node('button', 'row-action', 'Personal data');
+                details.type = 'button';
+                details.setAttribute('aria-label', `View personal fixed data for ${employee.name}`);
+                details.addEventListener('click', () => openEmployeeDetails(employee));
+                const review = node('button', 'row-action', 'Review');
+                review.type = 'button';
+                review.setAttribute('aria-label', `Review payroll source data for ${employee.name}`);
+                review.addEventListener('click', () => openSourceDataDialog(employee));
+                action.classList.add('employee-row-actions');
+                action.append(details, review);
+            } else if (isConnected) {
                 const view = node('button', 'row-action', 'View');
                 view.type = 'button';
                 view.setAttribute('aria-label', `View ${employee.name}`);
@@ -371,9 +431,11 @@
     }
 
     function openEmployeeDetails(employee) {
+        fixedDataEmployeeId = employee.id;
         byId('employee-detail-title').textContent = employee.name;
         byId('employee-detail-subtitle').textContent = `${employee.id} · ${companyName(employee.companyId)}`;
         byId('employee-detail-feedback').hidden = true;
+        byId('employee-fixed-data-edit').hidden = !source.canManageEmployeeData;
         const fields = byId('employee-detail-fields');
         fields.replaceChildren();
         const details = [
@@ -401,16 +463,17 @@
         const protectedFields = byId('employee-protected-fields');
         protectedFields.replaceChildren();
         const secrets = Array.isArray(employee.protectedFields) ? employee.protectedFields : [];
-        if (!secrets.length) {
-            protectedFields.append(node('p', 'empty-state', 'No sensitive fields were found in this employee master.'));
-        }
         secrets.forEach((field) => {
             const item = node('div', 'protected-field');
             const value = node('strong', 'protected-value', field.maskedValue);
-            const reveal = node('button', 'button button-light protected-reveal', source.canRevealSensitive ? 'Show value' : 'Admin access required');
+            const hasValue = field.maskedValue !== 'Not provided';
+            const reveal = node('button', 'button button-light protected-reveal',
+                !hasValue ? 'Not entered' : (source.canRevealSensitive ? 'Show value' : 'Admin access required'));
             reveal.type = 'button';
-            reveal.disabled = !source.canRevealSensitive;
-            reveal.setAttribute('aria-label', `${source.canRevealSensitive ? 'Show' : 'Admin access required for'} ${field.label}`);
+            reveal.disabled = !hasValue || !source.canRevealSensitive;
+            reveal.setAttribute('aria-label', !hasValue
+                ? `${field.label} has not been entered`
+                : `${source.canRevealSensitive ? 'Show' : 'Admin access required for'} ${field.label}`);
             reveal.addEventListener('click', () => {
                 if (reveal.dataset.revealed === 'true') {
                     value.textContent = field.maskedValue;
@@ -420,21 +483,21 @@
                 }
                 reveal.disabled = true;
                 reveal.textContent = 'Checking access…';
-                google.script.run
-                    .withSuccessHandler((fullValue) => {
+                apiRequest('/api/reveal', {
+                    method: 'POST',
+                    body: JSON.stringify({ employeeId: employee.id, fieldKey: field.key, columnNumber: field.columnNumber })
+                }).then(({ value: fullValue }) => {
                         value.textContent = fullValue;
                         reveal.textContent = 'Hide value';
                         reveal.dataset.revealed = 'true';
                         reveal.disabled = false;
-                    })
-                    .withFailureHandler((error) => {
+                    }).catch((error) => {
                         reveal.textContent = 'Show value';
                         reveal.disabled = false;
                         byId('employee-detail-feedback').textContent =
                             error.message || 'The protected value could not be revealed.';
                         byId('employee-detail-feedback').hidden = false;
-                    })
-                    .revealEmployeeSensitiveField(employee.id, field.columnNumber);
+                    });
             });
             item.append(node('span', '', field.label), value, reveal);
             protectedFields.append(item);
@@ -442,18 +505,145 @@
         byId('employee-detail-dialog').showModal();
     }
 
+    async function openEmployeeFixedDataDialog() {
+        const employee = employeeFor(fixedDataEmployeeId);
+        if (!employee || !source.canManageEmployeeData) return;
+        const button = byId('employee-fixed-data-edit');
+        button.disabled = true;
+        try {
+            const { values } = await apiRequest('/api/employee-fixed-data/read', {
+                method: 'POST',
+                body: JSON.stringify({ employeeId: employee.id })
+            });
+            const form = byId('employee-fixed-data-form');
+            for (const [key, value] of Object.entries(values)) {
+                form.elements.namedItem(key).value = value || '';
+            }
+            byId('employee-fixed-data-title').textContent = `${employee.name} · fixed details`;
+            byId('employee-fixed-data-error').hidden = true;
+            byId('employee-fixed-data-dialog').showModal();
+        } catch (error) {
+            byId('employee-detail-feedback').textContent =
+                error.message || 'The employee details could not be loaded.';
+            byId('employee-detail-feedback').hidden = false;
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    function renderSourceDataReview() {
+        const query = byId('data-review-search').value.trim().toLowerCase();
+        const companyId = byId('data-review-company').value;
+        const filter = byId('data-review-filter').value;
+        const rows = employees.filter((employee) => {
+            const pending = employee.salaryDataMissing || employee.leaveDataMissing;
+            const matchesStatus = filter === 'all' || (filter === 'pending' ? pending : !pending);
+            return matchesStatus
+                && (companyId === 'all' || employee.companyId === companyId)
+                && `${employee.name} ${employee.id}`.toLowerCase().includes(query);
+        });
+        const body = byId('data-review-table');
+        body.replaceChildren();
+        rows.forEach((employee) => {
+            const row = node('tr');
+            cell(row, '').append(personCell(employee));
+            cell(row, companyName(employee.companyId), 'company-cell');
+            cell(row, employee.salaryDataMissing ? 'Needs review' : 'Verified',
+                employee.salaryDataMissing ? 'review-cell' : 'verified-cell');
+            cell(row, employee.leaveDataMissing ? 'Needs review' : 'Verified',
+                employee.leaveDataMissing ? 'review-cell' : 'verified-cell');
+            const status = employee.salaryDataMissing || employee.leaveDataMissing
+                ? tag('Needs review', 'review-needed')
+                : tag('Complete', 'active');
+            cell(row, '').append(status);
+            const actionCell = cell(row, '');
+            const edit = node('button', 'row-action', 'Review data');
+            edit.type = 'button';
+            edit.addEventListener('click', () => openSourceDataDialog(employee));
+            actionCell.append(edit);
+            body.append(row);
+        });
+        byId('data-review-pending').textContent = source.dataReview?.pendingCount ?? 0;
+        byId('data-review-salary').textContent = source.dataReview?.salaryMissingCount ?? 0;
+        byId('data-review-leave').textContent = source.dataReview?.leaveMissingCount ?? 0;
+        byId('data-review-nav-count').textContent = source.dataReview?.pendingCount ?? 0;
+        byId('data-review-empty').hidden = rows.length !== 0;
+        byId('data-review-result-count').textContent = `Showing ${rows.length} of ${employees.length} employees`;
+    }
+
+    function openSourceDataDialog(employee) {
+        byId('source-data-dialog').dataset.employeeId = employee.id;
+        const values = [
+            ['source-basic-salary', employee.salaryDataMissing ? '' : employee.baseSalary],
+            ['source-fixed-allowance', employee.fixedAllowance],
+            ['source-per-day-rate', employee.perDayRate],
+            ['source-health-insurance', employee.healthInsurance],
+            ['source-lic-deduction', employee.licDeduction],
+            ['source-el-entitlement', employee.leaveDataMissing ? '' : employee.leaveBalance.elEntitlement],
+            ['source-el-balance', employee.leaveDataMissing ? '' : employee.leaveBalance.elBalance],
+            ['source-cl-entitlement', employee.leaveDataMissing ? '' : employee.leaveBalance.clEntitlement],
+            ['source-cl-balance', employee.leaveDataMissing ? '' : employee.leaveBalance.clBalance]
+        ];
+        byId('source-data-form').reset();
+        byId('source-data-error').hidden = true;
+        byId('source-data-title').textContent = `Verify ${employee.name}`;
+        byId('source-data-subtitle').textContent = `${employee.id} · ${companyName(employee.companyId)}. Save only values confirmed against an authoritative record.`;
+        values.forEach(([id, value]) => {
+            byId(id).value = value == null ? '' : String(value);
+        });
+        byId('source-data-dialog').showModal();
+    }
+
+    async function saveSourceData(event) {
+        event.preventDefault();
+        const fields = {
+            basicSalary: 'source-basic-salary',
+            fixedAllowance: 'source-fixed-allowance',
+            perDayRate: 'source-per-day-rate',
+            healthInsurance: 'source-health-insurance',
+            licDeduction: 'source-lic-deduction',
+            elEntitlement: 'source-el-entitlement',
+            elBalance: 'source-el-balance',
+            clEntitlement: 'source-cl-entitlement',
+            clBalance: 'source-cl-balance'
+        };
+        const values = Object.fromEntries(Object.entries(fields).map(([key, id]) => [
+            key,
+            Number(byId(id).value)
+        ]));
+        const employeeId = byId('source-data-dialog').dataset.employeeId;
+        const save = byId('source-data-save');
+        save.disabled = true;
+        byId('source-data-error').hidden = true;
+        try {
+            await apiRequest('/api/employee-payroll-data', {
+                method: 'POST',
+                body: JSON.stringify({
+                    employeeId,
+                    values,
+                    confirmed: byId('source-data-confirmed').checked
+                })
+            });
+            window.location.reload();
+        } catch (error) {
+            byId('source-data-error').textContent = error.message || 'Employee payroll data could not be saved.';
+            byId('source-data-error').hidden = false;
+            save.disabled = false;
+        }
+    }
+
     function updateRegisterOptions() {
         const select = byId('register-select');
         select.replaceChildren();
-        registerTabs.forEach((sheetName) => select.append(new Option(sheetName, sheetName)));
+        registerNames.forEach((registerName) => select.append(new Option(registerName, registerName)));
         select.value = 'Salary Register';
     }
 
-    function loadRegisterPage(sheetName, startRow) {
+    function loadRegisterPage(registerName, startRow) {
         if (registerLoading) return;
         registerLoading = true;
-        byId('register-title').textContent = sheetName;
-        byId('register-caption').textContent = 'Loading authorized workbook data…';
+        byId('register-title').textContent = registerName;
+        byId('register-caption').textContent = 'Loading local payroll data…';
         byId('register-feedback').textContent = '';
         byId('register-body').replaceChildren();
         byId('register-head').replaceChildren();
@@ -461,21 +651,19 @@
         byId('register-previous').disabled = true;
         byId('register-next').disabled = true;
         byId('export-register').disabled = true;
-        google.script.run
-            .withSuccessHandler((page) => {
+        apiRequest(`/api/register?registerName=${encodeURIComponent(registerName)}&startRow=${encodeURIComponent(startRow)}`)
+            .then((page) => {
                 currentRegisterPage = page;
                 currentRegisterStart = startRow;
                 renderRegisterPage(page);
                 registerLoading = false;
-            })
-            .withFailureHandler((error) => {
+            }).catch((error) => {
                 registerLoading = false;
                 byId('register-caption').textContent = 'Register could not be loaded.';
                 byId('register-feedback').textContent =
-                    error.message || `Unable to load the ${sheetName} tab.`;
+                    error.message || `Unable to load the ${registerName} register.`;
                 byId('register-page-status').textContent = '';
-            })
-            .getPayrollRegisterPage(sheetName, startRow);
+            });
     }
 
     function renderRegisterPage(page) {
@@ -493,9 +681,9 @@
         });
         const firstShown = page.rows.length ? page.rows[0].rowNumber : page.startRow;
         const lastShown = page.rows.length ? page.rows[page.rows.length - 1].rowNumber : firstShown;
-        byId('register-title').textContent = page.sheetName;
+        byId('register-title').textContent = page.registerName;
         byId('register-caption').textContent =
-            'Source workbook values. Read-only view; sensitive columns are masked.';
+            'SQLite payroll values. Read-only view; sensitive columns are masked.';
         byId('register-page-status').textContent =
             `${page.rows.length ? `Rows ${firstShown}–${lastShown}` : 'No rows on this page'} · ${page.totalRows} source rows`;
         byId('register-previous').disabled = currentRegisterStart <= 5 || registerLoading;
@@ -520,7 +708,11 @@
             ? 'Review source'
             : money(total);
         byId('payroll-selection-caption').textContent = `${selected.length} ${selected.length === 1 ? 'employee' : 'employees'} selected`;
-        byId('process-payroll').disabled = selected.length === 0;
+        byId('process-payroll').disabled = selected.length === 0
+            || selected.some((employee) => employee.salaryDataMissing || employee.leaveDataMissing);
+        byId('process-payroll').title = selected.some((employee) => employee.salaryDataMissing || employee.leaveDataMissing)
+            ? 'Complete verified salary and leave data for selected employees first.'
+            : '';
     }
 
     function renderPayrollSelection() {
@@ -535,9 +727,11 @@
             checkbox.className = 'payroll-checkbox';
             checkbox.checked = selectedIds.has(employee.id);
             checkbox.dataset.employeeId = employee.id;
+            checkbox.disabled = employee.salaryDataMissing || employee.leaveDataMissing;
             checkbox.setAttribute('aria-label', `Select ${employee.name} for payroll`);
+            if (checkbox.disabled) checkbox.title = 'Complete this employee’s verified salary and leave data before payroll.';
             checkbox.addEventListener('change', () => {
-                if (checkbox.checked) selectedIds.add(employee.id);
+                if (checkbox.checked && !checkbox.disabled) selectedIds.add(employee.id);
                 else selectedIds.delete(employee.id);
                 byId('payroll-result').hidden = true;
                 updatePayrollSummary();
@@ -559,8 +753,10 @@
     }
 
     function updateSelectAllState() {
-        const selectedVisible = filteredPayrollEmployees.filter((employee) => selectedIds.has(employee.id)).length;
-        const allSelected = filteredPayrollEmployees.length > 0 && selectedVisible === filteredPayrollEmployees.length;
+        const selectableEmployees = filteredPayrollEmployees.filter((employee) =>
+            !employee.salaryDataMissing && !employee.leaveDataMissing);
+        const selectedVisible = selectableEmployees.filter((employee) => selectedIds.has(employee.id)).length;
+        const allSelected = selectableEmployees.length > 0 && selectedVisible === selectableEmployees.length;
         const checkbox = byId('select-all-visible');
         checkbox.checked = allSelected;
         checkbox.indeterminate = selectedVisible > 0 && !allSelected;
@@ -584,16 +780,17 @@
         const button = byId('process-payroll');
         button.disabled = true;
         button.textContent = 'Checking selected employees…';
-        google.script.run
-            .withSuccessHandler(showConnectedPreview)
-            .withFailureHandler((error) => {
+        apiRequest('/api/payroll-preview', {
+            method: 'POST',
+            body: JSON.stringify({ employeeIds: selected.map((employee) => employee.id), period })
+        }).then(showConnectedPreview)
+            .catch((error) => {
                 button.textContent = 'Prepare payroll preview →';
                 button.disabled = selectedIds.size === 0;
                 const result = byId('payroll-result');
-                result.textContent = error.message || 'The source payroll preview failed. Check the Google Sheet and try again.';
+                result.textContent = error.message || 'The local payroll preview failed. Check the payroll data and try again.';
                 result.hidden = false;
-            })
-            .getSelectedPayrollPreview(selected.map((employee) => employee.id), period);
+            });
         return;
     }
 
@@ -602,7 +799,7 @@
         const gross = rows.reduce((sum, employee) => sum + employee.grossSalary, 0);
         const deductions = rows.reduce((sum, employee) => sum + employee.totalDeductions, 0);
         const net = rows.reduce((sum, employee) => sum + employee.netPayable, 0);
-        const heading = node('strong', '', `${rows.length} selected ${rows.length === 1 ? 'employee' : 'employees'} · source-sheet preview`);
+        const heading = node('strong', '', `${rows.length} selected ${rows.length === 1 ? 'employee' : 'employees'} · local payroll preview`);
         result.replaceChildren(
             heading,
             document.createTextNode(` · Gross ${money(gross)} · Deductions ${money(deductions)} · Net payable ${money(net)}. Preview only; nothing has been archived or paid.`)
@@ -619,6 +816,7 @@
     }
 
     function renderAttendance() {
+        renderAttendanceImport();
         const company = byId('attendance-company-filter').value;
         const subset = employees.filter((employee) => company === 'all' || employee.companyId === company);
         const body = byId('attendance-table');
@@ -628,16 +826,14 @@
             cell(row, '').append(personCell(employee));
             cell(row, companyName(employee.companyId), 'company-cell');
             const attendance = employee.attendance || {
-                workDays: employee.presentDays ?? 0,
-                leaveDays: employee.workingDays ? Math.max(0, employee.workingDays - employee.presentDays) : 0,
+                workDays: 0,
+                leaveDays: 0,
                 longestContinuousSpell: 0,
                 lopDays: 0,
                 lopAmount: 0,
                 processAllowance: 0,
                 punctualIncentive: 0,
-                fullAttendanceBonus: 0,
-                totalLateDays: 0,
-                lateAttendanceDeduction: 0
+                fullAttendanceBonus: 0
             };
             const inputFields = [
                 ['workDays', attendance.workDays, false],
@@ -645,19 +841,19 @@
                 ['longestContinuousSpell', attendance.longestContinuousSpell, false]
             ];
             inputFields.forEach(([field, value]) => appendAttendanceInput(row, employee, field, value, false));
-            cell(row, attendance.lopDays ?? 0, 'align-right');
-            cell(row, attendance.lopAmount == null ? 'Check sheet' : money(attendance.lopAmount), 'align-right amount-cell');
+            cell(row, attendance.lopDays == null ? 'Review source' : attendance.lopDays, 'align-right');
+            cell(row, attendance.lopAmount == null ? 'Review source' : money(attendance.lopAmount), 'align-right amount-cell');
             [
                 ['processAllowance', attendance.processAllowance, true],
                 ['punctualIncentive', attendance.punctualIncentive, true],
-                ['fullAttendanceBonus', attendance.fullAttendanceBonus, true],
-                ['totalLateDays', attendance.totalLateDays, false]
+                ['fullAttendanceBonus', attendance.fullAttendanceBonus, true]
             ].forEach(([field, value, isMoney]) => appendAttendanceInput(row, employee, field, value, isMoney));
-            cell(row, attendance.lateAttendanceDeduction == null ? 'Check sheet' : money(attendance.lateAttendanceDeduction), 'align-right amount-cell');
             const actionCell = cell(row, '');
             const action = node('div', 'attendance-action');
             const save = node('button', 'attendance-save', 'Save');
             save.type = 'button';
+            save.disabled = source.canUpdateAttendance === false;
+            if (save.disabled) save.hidden = true;
             save.addEventListener('click', () => saveAttendance(employee, row, save));
             action.append(save);
             actionCell.append(action);
@@ -668,9 +864,229 @@
         byId('attendance-average').textContent = String(reportedWorkDays);
         byId('leave-pending').textContent = leaveRequests.filter((request) => request.status === 'Pending').length;
         byId('leave-used').textContent = isConnected
-            ? employees.reduce((sum, employee) => sum + (employee.leaveBalance?.clTaken || 0) + (employee.leaveBalance?.elTaken || 0), 0)
+            ? employees.some((employee) => employee.leaveDataMissing)
+                ? 'Review source'
+                : employees.reduce((sum, employee) => sum + employee.leaveBalance.clTaken + employee.leaveBalance.elTaken, 0)
             : employees.reduce((sum, employee) => sum + employee.leaveUsed, 0);
         renderLeaveRequests();
+    }
+
+    function renderAttendanceImport() {
+        const panel = byId('attendance-import-panel');
+        const form = byId('attendance-import-form');
+        const canImport = Boolean(source.canUpdateAttendance) && !source.periodArchived;
+        panel.hidden = !source.canUpdateAttendance;
+        form.querySelectorAll('input, button').forEach((control) => {
+            control.disabled = !canImport;
+        });
+        byId('attendance-import-period').textContent = source.periodLabel || source.payrollPeriod;
+        if (source.periodArchived) {
+            byId('attendance-import-feedback').textContent = 'This payroll month is archived; attendance cannot be changed.';
+        }
+    }
+
+    async function previewAttendanceImport(event) {
+        event.preventDefault();
+        const file = byId('attendance-import-file').files[0];
+        const feedback = byId('attendance-import-feedback');
+        if (!file) {
+            feedback.textContent = 'Choose a CSV or .xlsx attendance file first.';
+            return;
+        }
+        const previewButton = byId('attendance-import-preview');
+        previewButton.disabled = true;
+        previewButton.textContent = 'Checking roster…';
+        feedback.textContent = 'Checking the file against every active employee…';
+        byId('attendance-import-preview-panel').hidden = true;
+        attendancePreviewRows = null;
+        try {
+            const preview = await apiRequest('/api/attendance/preview', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': file.type || 'application/octet-stream',
+                    'X-Upload-Filename': file.name
+                },
+                body: file
+            });
+            attendancePreviewRows = preview.rows;
+            const rows = byId('attendance-import-rows');
+            rows.replaceChildren();
+            preview.rows.forEach((attendance) => {
+                const employee = employeeFor(attendance.employeeId);
+                const row = node('div', 'attendance-import-row');
+                row.append(
+                    node('strong', '', employee?.name || attendance.employeeId),
+                    node('span', '', attendance.employeeId),
+                    node('span', '', `${attendance.workDays} work · ${attendance.leaveDays} leave`),
+                    node('span', '', `Longest spell ${attendance.longestContinuousSpell}`)
+                );
+                rows.append(row);
+            });
+            byId('attendance-import-summary').textContent =
+                `${preview.rows.length} active employees · ${preview.period} · ${preview.calendarDays} calendar days. No data has been changed yet.`;
+            byId('attendance-import-preview-panel').hidden = false;
+            feedback.textContent = 'Roster validated. Review the preview, then confirm the import.';
+        } catch (error) {
+            feedback.textContent = error.message || 'The attendance file could not be validated.';
+        } finally {
+            previewButton.disabled = !source.canUpdateAttendance || source.periodArchived;
+            previewButton.textContent = 'Preview attendance';
+        }
+    }
+
+    async function confirmAttendanceImport() {
+        if (!attendancePreviewRows) return;
+        const button = byId('attendance-import-confirm');
+        const feedback = byId('attendance-import-feedback');
+        button.disabled = true;
+        button.textContent = 'Importing…';
+        try {
+            const result = await apiRequest('/api/attendance/import', {
+                method: 'POST',
+                body: JSON.stringify({ rows: attendancePreviewRows })
+            });
+            feedback.textContent = `${result.importedCount} employee attendance records saved for ${result.period}. Reloading payroll calculations…`;
+            window.location.reload();
+        } catch (error) {
+            feedback.textContent = error.message || 'Attendance could not be imported.';
+            button.disabled = false;
+            button.textContent = 'Import and recalculate payroll';
+        }
+    }
+
+    function cancelAttendanceImportPreview() {
+        attendancePreviewRows = null;
+        byId('attendance-import-preview-panel').hidden = true;
+        byId('attendance-import-rows').replaceChildren();
+        byId('attendance-import-feedback').textContent = '';
+    }
+
+    function downloadAttendanceTemplate() {
+        exportCsv('attendance-import-template.csv', [
+            'EMP ID',
+            'WORK DAYS',
+            'LEAVE DAYS THIS MONTH',
+            'LONGEST CONTINUOUS SPELL',
+            'PROCESS ALLOWANCE',
+            'PUNCTUAL INCENTIVE',
+            'FULL ATT. BONUS'
+        ], []);
+    }
+
+    function renderAdvances() {
+        const form = byId('advance-create-form');
+        const canManage = Boolean(source.canManageAdvances);
+        form.hidden = !canManage;
+        const employeeSelect = byId('advance-employee');
+        employeeSelect.replaceChildren(new Option('Choose an active employee', ''));
+        employees.filter((employee) => employee.status === 'active')
+            .forEach((employee) => employeeSelect.append(new Option(`${employee.name} (${employee.id})`, employee.id)));
+        const createButton = byId('advance-create-button');
+        createButton.disabled = !employeeSelect.options.length
+            || employees.every((employee) => employee.status !== 'active');
+
+        const body = byId('advance-table');
+        body.replaceChildren();
+        const advances = Array.isArray(source.advances) ? source.advances : [];
+        if (!advances.length) {
+            const row = node('tr');
+            const empty = cell(row, 'No advances or loans recorded.', 'empty-state-cell');
+            empty.colSpan = 9;
+            body.append(row);
+        }
+        advances.forEach((advance) => {
+            const row = node('tr');
+            cell(row, '').append(node('strong', '', advance.employeeName), node('small', 'advance-employee-id', advance.employeeId));
+            cell(row, advance.advanceType === 'school' ? 'School loan' : 'Advance');
+            cell(row, money(advance.openingBalance), 'amount-cell');
+            cell(row, money(advance.alreadyRecovered), 'amount-cell');
+            cell(row, money(advance.currentBalance), 'amount-cell');
+            if (canManage) {
+                const monthlyCell = cell(row, '');
+                const remarksCell = cell(row, '');
+                const statusCell = cell(row, '');
+                const actions = cell(row, '');
+                const monthly = document.createElement('input');
+                monthly.className = 'advance-edit-input';
+                monthly.type = 'number';
+                monthly.min = '0';
+                monthly.max = '100000000';
+                monthly.step = '0.01';
+                monthly.value = String(advance.monthlyDeduction);
+                monthly.setAttribute('aria-label', `Monthly deduction for ${advance.employeeName}`);
+                monthlyCell.append(monthly);
+                const remarks = document.createElement('input');
+                remarks.className = 'advance-edit-input';
+                remarks.type = 'text';
+                remarks.maxLength = 500;
+                remarks.value = advance.remarks;
+                remarks.setAttribute('aria-label', `Remarks for ${advance.employeeName}`);
+                remarksCell.append(remarks);
+                const active = document.createElement('input');
+                active.type = 'checkbox';
+                active.checked = advance.isActive;
+                active.disabled = !advance.isActive && advance.currentBalance <= 0;
+                active.setAttribute('aria-label', `Active recovery for ${advance.employeeName}`);
+                statusCell.append(active, node('span', '', advance.isActive ? ' Active' : ' Closed'));
+                const save = node('button', 'button button-light advance-save', 'Save');
+                save.type = 'button';
+                save.addEventListener('click', async () => {
+                    save.disabled = true;
+                    byId('advance-feedback').textContent = `Saving ${advance.employeeName}'s advance…`;
+                    try {
+                        await apiRequest(`/api/advances/${advance.id}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({
+                                values: {
+                                    monthlyDeduction: Number(monthly.value),
+                                    remarks: remarks.value,
+                                    isActive: active.checked
+                                }
+                            })
+                        });
+                        window.location.reload();
+                    } catch (error) {
+                        byId('advance-feedback').textContent = error.message || 'The advance could not be updated.';
+                        save.disabled = false;
+                    }
+                });
+                actions.append(save);
+            } else {
+                cell(row, money(advance.monthlyDeduction), 'amount-cell');
+                cell(row, advance.remarks);
+                cell(row, advance.isActive ? 'Active' : 'Closed');
+                cell(row, '');
+            }
+            body.append(row);
+        });
+    }
+
+    async function createAdvance(event) {
+        event.preventDefault();
+        const button = byId('advance-create-button');
+        const feedback = byId('advance-feedback');
+        button.disabled = true;
+        feedback.textContent = 'Adding shared advance…';
+        try {
+            await apiRequest('/api/advances', {
+                method: 'POST',
+                body: JSON.stringify({
+                    values: {
+                        employeeId: byId('advance-employee').value,
+                        advanceType: byId('advance-type').value,
+                        openingBalance: Number(byId('advance-original').value),
+                        alreadyRecovered: Number(byId('advance-recovered').value),
+                        monthlyDeduction: Number(byId('advance-monthly').value),
+                        remarks: byId('advance-remarks').value
+                    }
+                })
+            });
+            feedback.textContent = 'Advance saved. Reloading the shared payroll data…';
+            window.location.reload();
+        } catch (error) {
+            feedback.textContent = error.message || 'The advance could not be added.';
+            button.disabled = false;
+        }
     }
 
     function appendAttendanceInput(row, employee, field, value, isMoney) {
@@ -679,9 +1095,10 @@
         input.type = 'number';
         input.min = '0';
         input.max = isMoney ? '10000000' : String(source.calendarDays || 31);
-        input.step = '1';
+        input.step = isMoney ? '1' : '0.5';
         input.value = value == null ? '' : String(value);
         input.dataset.field = field;
+        input.disabled = source.canUpdateAttendance === false;
         input.setAttribute('aria-label', `${field} for ${employee.name}`);
         cell(row, '').append(input);
     }
@@ -694,19 +1111,19 @@
         button.disabled = true;
         button.textContent = 'Saving';
         if (isConnected) {
-            google.script.run
-                .withSuccessHandler(() => {
+            apiRequest('/api/attendance', {
+                method: 'POST',
+                body: JSON.stringify({ employeeId: employee.id, fields })
+            }).then(() => {
                     button.textContent = 'Saved';
                     button.classList.add('saved');
                     window.setTimeout(() => window.location.reload(), 500);
-                })
-                .withFailureHandler((error) => {
+                }).catch((error) => {
                     button.disabled = false;
                     button.textContent = 'Save';
-                    const feedback = node('span', 'attendance-feedback', error.message || 'Attendance update failed. Check sheet access and try again.');
+                    const feedback = node('span', 'attendance-feedback', error.message || 'Attendance update failed. Try again.');
                     row.querySelector('.attendance-action').append(feedback);
-                })
-                .updateAttendance(employee.id, fields);
+                });
             return;
         }
         employee.attendance = { ...(employee.attendance || {}), ...Object.fromEntries(
@@ -730,11 +1147,13 @@
                 if (!balance) return;
                 const row = node('div', 'leave-row');
                 const info = node('div', 'leave-info');
-                info.append(
-                    node('strong', '', employee.name),
-                    node('small', '', `${employee.id} · CL: ${balance.clTaken}/${balance.clEntitlement} used (${balance.clBalance} left) · EL: ${balance.elTaken}/${balance.elEntitlement} used (${balance.elBalance} left)`)
-                );
-                row.append(avatar(employee), info, tag(staffLabel(employee), staffType(employee)));
+                info.append(node('strong', '', employee.name));
+                info.append(node('small', '', employee.leaveDataMissing
+                    ? `${employee.id} · Leave entitlements and opening balances need administrator verification`
+                    : `${employee.id} · CL: ${balance.clTaken}/${balance.clEntitlement} used (${balance.clBalance} left) · EL: ${balance.elTaken}/${balance.elEntitlement} used (${balance.elBalance} left)`));
+                row.append(avatar(employee), info, employee.leaveDataMissing
+                    ? tag('Review source', 'review-needed')
+                    : tag(staffLabel(employee), staffType(employee)));
                 list.append(row);
             });
             return;
@@ -787,7 +1206,7 @@
             row.append(
                 node('strong', '', company.name),
                 node('span', '', `${group.length} employees`),
-                node('strong', 'summary-line-amount', total == null ? 'Review source formulas' : money(total))
+                node('strong', 'summary-line-amount', total == null ? 'No payroll calculated' : money(total))
             );
             container.append(row);
         });
@@ -802,12 +1221,128 @@
             row.append(
                 node('span', `company-marker company-color-${index % 2}`, company.shortName[0]),
                 node('strong', '', company.name),
-                node('span', 'settings-company-count', `${staff.length} employees in source sheet`)
+                node('span', 'settings-company-count', `${staff.length} employees in portal data`)
             );
             container.append(row);
         });
         byId('setting-pay-period').textContent = source.periodLabel || source.payrollPeriod || 'Not set';
         byId('setting-calendar-days').textContent = source.calendarDays || 'Not set';
+        const rulesForm = byId('payroll-rules-form');
+        rulesForm.hidden = !source.canManagePayrollRules;
+        const rules = source.payrollRules || {};
+        rulesForm.querySelectorAll('[data-rule]').forEach((input) => {
+            const value = rules[input.dataset.rule];
+            input.value = input.dataset.percent === 'true'
+                ? String(Number(value) * 100)
+                : String(value ?? '');
+        });
+    }
+
+    async function savePayrollRules(event) {
+        event.preventDefault();
+        const form = byId('payroll-rules-form');
+        const values = {};
+        form.querySelectorAll('[data-rule]').forEach((input) => {
+            const entered = Number(input.value);
+            values[input.dataset.rule] = input.dataset.percent === 'true' ? entered / 100 : entered;
+        });
+        const feedback = byId('payroll-rules-feedback');
+        feedback.textContent = 'Saving shared payroll rules…';
+        const save = byId('save-payroll-rules');
+        save.disabled = true;
+        try {
+            await apiRequest('/api/payroll-rules', {
+                method: 'POST',
+                body: JSON.stringify({ values })
+            });
+            feedback.textContent = 'Rules saved for all portal users. Payroll previews now use the updated values.';
+            window.setTimeout(() => window.location.reload(), 800);
+        } catch (error) {
+            feedback.textContent = error.message || 'Shared payroll rules could not be saved.';
+        } finally {
+            save.disabled = false;
+        }
+    }
+
+    function configurePayrollActions() {
+        const archiveButton = byId('archive-payroll');
+        archiveButton.hidden = !source.canUpdateAttendance || source.periodArchived;
+        const sourceDataIncomplete = employees.some((employee) =>
+            employee.status === 'active' && (employee.salaryDataMissing || employee.leaveDataMissing));
+        archiveButton.disabled = Boolean(source.esiReviewRequiredCount) || sourceDataIncomplete;
+        archiveButton.title = source.esiReviewRequiredCount
+            ? 'Review ESI coverage statuses before archiving payroll.'
+            : (sourceDataIncomplete ? 'Verify salary and leave source data for every active employee before archiving.' : '');
+
+        const periodPanel = byId('payroll-period-panel');
+        periodPanel.hidden = !source.canUpdateAttendance || !source.periodArchived;
+        const [year, month] = source.payrollPeriod.split('-').map(Number);
+        const nextDate = new Date(Date.UTC(year, month, 1));
+        byId('next-payroll-period').value =
+            `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, '0')}`;
+
+        const esiPanel = byId('esi-review-panel');
+        esiPanel.hidden = !source.canReviewEsi || !source.esiReviewRequiredCount;
+        const esiEmployee = byId('esi-employee');
+        esiEmployee.replaceChildren();
+        (source.esiReviewRequiredEmployees || []).forEach((employee) => {
+            esiEmployee.append(new Option(`${employee.name} (${employee.id})`, employee.id));
+        });
+        if (source.esiReviewRequiredEmployees?.length) {
+            byId('esi-coverage-status').value = source.esiReviewRequiredEmployees[0].status || 'N';
+        }
+    }
+
+    async function archiveCurrentPayroll() {
+        const button = byId('archive-payroll');
+        if (!window.confirm(`Archive payroll for ${source.periodLabel}? This records the payroll history and resets this month's leave inputs.`)) return;
+        button.disabled = true;
+        button.textContent = 'Archiving…';
+        try {
+            await apiRequest('/api/archive', { method: 'POST', body: JSON.stringify({}) });
+            window.location.reload();
+        } catch (error) {
+            button.disabled = false;
+            button.textContent = 'Archive payroll & close month';
+            byId('archive-feedback').textContent = error.message || 'Payroll could not be archived.';
+        }
+    }
+
+    async function startNextPayrollPeriod(event) {
+        event.preventDefault();
+        const button = byId('start-payroll-period');
+        button.disabled = true;
+        byId('payroll-period-feedback').textContent = '';
+        try {
+            await apiRequest('/api/payroll-period', {
+                method: 'POST',
+                body: JSON.stringify({ period: byId('next-payroll-period').value })
+            });
+            window.location.reload();
+        } catch (error) {
+            button.disabled = false;
+            byId('payroll-period-feedback').textContent = error.message || 'The next payroll period could not be started.';
+        }
+    }
+
+    async function saveEsiCoverage(event) {
+        event.preventDefault();
+        const button = byId('save-esi-coverage');
+        button.disabled = true;
+        byId('esi-review-feedback').textContent = '';
+        try {
+            await apiRequest('/api/esi-coverage', {
+                method: 'POST',
+                body: JSON.stringify({
+                    employeeId: byId('esi-employee').value,
+                    status: byId('esi-coverage-status').value
+                })
+            });
+            window.location.reload();
+        } catch (error) {
+            button.disabled = false;
+            byId('esi-review-feedback').textContent = error.message || 'ESI coverage could not be updated.';
+        }
     }
 
     function exportCsv(filename, headers, rows) {
@@ -897,35 +1432,26 @@
     function renderAll() {
         renderDashboard();
         renderEmployees();
+        renderSourceDataReview();
         renderPayrollSelection();
         renderAttendance();
         renderReports();
         renderSettings();
+        renderAdvances();
     }
 
-    function signOutOfPortal() {
+    async function signOutOfPortal() {
         appShell.hidden = true;
         loginGate.hidden = false;
-        loginButton.disabled = false;
-        loginButton.textContent = 'Continue with Google';
-        loginMessage.textContent = 'You have signed out of Employees Pay Roll on this device. Sign in again to reload authorized payroll data. Your Google account remains signed in to Google.';
-        loginError.hidden = true;
-        selectedIds.clear();
-        employees = [];
-        payrollRuns = [];
-        ['employees', 'payrollRuns', 'companyReports', 'advances', 'leaveBalances', 'companyTotals', 'leaveRequests']
-            .forEach((key) => {
-                if (Array.isArray(source[key])) source[key].length = 0;
-                else source[key] = null;
-            });
-        source.userEmail = null;
-        currentRegisterPage = null;
-        byId('employee-detail-dialog').close();
-        document.querySelectorAll('#app-shell tbody').forEach((body) => body.replaceChildren());
-        byId('payroll-result').replaceChildren();
-        byId('register-head').replaceChildren();
-        byId('register-body').replaceChildren();
-        window.location.reload();
+        loginButton.disabled = true;
+        loginButton.textContent = 'Signing out…';
+        try {
+            await apiRequest('/api/logout', { method: 'POST' });
+            csrfToken = null;
+            window.location.reload();
+        } catch (error) {
+            showLoginError(error);
+        }
     }
 
     function showView(name) {
@@ -947,19 +1473,31 @@
     document.querySelectorAll('#employee-company-filter, #employee-type-filter, #employee-status-filter')
         .forEach((select) => select.addEventListener('change', renderEmployees));
     byId('employee-search').addEventListener('input', renderEmployees);
+    byId('data-review-search').addEventListener('input', renderSourceDataReview);
+    byId('data-review-company').addEventListener('change', renderSourceDataReview);
+    byId('data-review-filter').addEventListener('change', renderSourceDataReview);
+    byId('source-data-form').addEventListener('submit', saveSourceData);
+    byId('source-data-close').addEventListener('click', () => byId('source-data-dialog').close());
+    byId('source-data-cancel').addEventListener('click', () => byId('source-data-dialog').close());
+    byId('source-data-dialog').addEventListener('click', (event) => {
+        if (event.target === byId('source-data-dialog')) byId('source-data-dialog').close();
+    });
     document.querySelectorAll('#payroll-company-filter, #payroll-type-filter')
         .forEach((select) => select.addEventListener('change', renderPayrollSelection));
     byId('select-all-visible').addEventListener('change', () => {
         filteredPayrollEmployees.forEach((employee) => {
-            if (byId('select-all-visible').checked) selectedIds.add(employee.id);
+            if (byId('select-all-visible').checked
+                && !employee.salaryDataMissing && !employee.leaveDataMissing) selectedIds.add(employee.id);
             else selectedIds.delete(employee.id);
         });
         byId('payroll-result').hidden = true;
         renderPayrollSelection();
     });
     byId('select-toggle').addEventListener('click', () => {
-        const select = filteredPayrollEmployees.some((employee) => !selectedIds.has(employee.id));
-        filteredPayrollEmployees.forEach((employee) => {
+        const selectableEmployees = filteredPayrollEmployees.filter((employee) =>
+            !employee.salaryDataMissing && !employee.leaveDataMissing);
+        const select = selectableEmployees.some((employee) => !selectedIds.has(employee.id));
+        selectableEmployees.forEach((employee) => {
             if (select) selectedIds.add(employee.id);
             else selectedIds.delete(employee.id);
         });
@@ -967,13 +1505,61 @@
         renderPayrollSelection();
     });
     byId('process-payroll').addEventListener('click', processPayroll);
+    byId('payroll-source-review-link').addEventListener('click', () => showView('data-review'));
+    byId('dashboard-review-link').addEventListener('click', () => showView('data-review'));
     byId('attendance-company-filter').addEventListener('change', renderAttendance);
+    byId('attendance-import-form').addEventListener('submit', previewAttendanceImport);
+    byId('attendance-import-template').addEventListener('click', downloadAttendanceTemplate);
+    byId('attendance-import-confirm').addEventListener('click', confirmAttendanceImport);
+    byId('attendance-import-cancel').addEventListener('click', cancelAttendanceImportPreview);
+    byId('archive-payroll').addEventListener('click', archiveCurrentPayroll);
+    byId('payroll-period-form').addEventListener('submit', startNextPayrollPeriod);
+    byId('payroll-rules-form').addEventListener('submit', savePayrollRules);
+    byId('advance-create-form').addEventListener('submit', createAdvance);
+    byId('esi-coverage-form').addEventListener('submit', saveEsiCoverage);
     byId('add-employee-button').addEventListener('click', () => openEmployeeDialog());
     byId('employee-form').addEventListener('submit', saveEmployee);
     document.querySelector('.dialog-close').addEventListener('click', () => byId('employee-dialog').close());
     document.querySelector('.dialog-cancel').addEventListener('click', () => byId('employee-dialog').close());
     byId('employee-dialog').addEventListener('click', (event) => {
         if (event.target === byId('employee-dialog')) byId('employee-dialog').close();
+    });
+    byId('employee-fixed-data-edit').addEventListener('click', openEmployeeFixedDataDialog);
+    byId('employee-fixed-data-close').addEventListener('click', () => byId('employee-fixed-data-dialog').close());
+    byId('employee-fixed-data-dialog').addEventListener('click', (event) => {
+        if (event.target === byId('employee-fixed-data-dialog')) byId('employee-fixed-data-dialog').close();
+    });
+    byId('employee-fixed-data-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = byId('employee-fixed-data-form');
+        const values = Object.fromEntries(
+            ['dateOfBirth', 'mobile', 'aadhaar', 'pan', 'uan', 'bankAccount', 'bankName']
+                .map((key) => [key, form.elements.namedItem(key).value.trim()])
+        );
+        const error = byId('employee-fixed-data-error');
+        error.hidden = true;
+        const save = form.querySelector('button[type="submit"]');
+        save.disabled = true;
+        save.textContent = 'Saving…';
+        try {
+            await apiRequest('/api/employee-fixed-data', {
+                method: 'POST',
+                body: JSON.stringify({
+                    employeeId: fixedDataEmployeeId,
+                    values,
+                    confirmed: form.elements.namedItem('confirmed').checked
+                })
+            });
+            byId('employee-fixed-data-dialog').close();
+            byId('employee-detail-dialog').close();
+            window.location.reload();
+        } catch (requestError) {
+            error.textContent = requestError.message || 'The employee details could not be saved.';
+            error.hidden = false;
+        } finally {
+            save.disabled = false;
+            save.textContent = 'Save fixed details';
+        }
     });
     byId('employee-detail-close').addEventListener('click', () => byId('employee-detail-dialog').close());
     byId('employee-detail-dialog').addEventListener('click', (event) => {
@@ -990,15 +1576,15 @@
     });
     byId('register-select').addEventListener('change', () => loadRegisterPage(byId('register-select').value, 5));
     byId('register-next').addEventListener('click', () => {
-        if (currentRegisterPage?.hasMore) loadRegisterPage(currentRegisterPage.sheetName, currentRegisterPage.nextStartRow);
+        if (currentRegisterPage?.hasMore) loadRegisterPage(currentRegisterPage.registerName, currentRegisterPage.nextStartRow);
     });
     byId('register-previous').addEventListener('click', () => {
-        loadRegisterPage(currentRegisterPage?.sheetName || byId('register-select').value, Math.max(5, currentRegisterStart - 100));
+        loadRegisterPage(currentRegisterPage?.registerName || byId('register-select').value, Math.max(5, currentRegisterStart - 100));
     });
     byId('export-register').addEventListener('click', () => {
         if (!currentRegisterPage?.rows.length) return;
-        exportCsv(`employees-pay-roll-${currentRegisterPage.sheetName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-page.csv`,
-            ['Source row', ...currentRegisterPage.columns],
+        exportCsv(`employees-pay-roll-${currentRegisterPage.registerName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-page.csv`,
+            ['Record number', ...currentRegisterPage.columns],
             currentRegisterPage.rows.map((record) => [record.rowNumber, ...record.values]));
     });
     document.querySelector('.notice-close').addEventListener('click', (event) => event.currentTarget.closest('.notice-bar').remove());
@@ -1022,25 +1608,48 @@
 
     updateCompanyFilters();
     renderAll();
+    configurePayrollActions();
     }
 
-    if (googleRun) {
-        appShell.hidden = true;
-        loginGate.hidden = false;
-        loginButton.addEventListener('click', () => {
-            loginButton.disabled = true;
-            loginButton.textContent = 'Verifying Google account…';
-            loginError.hidden = true;
-            google.script.run
-                .withSuccessHandler(initialize)
-                .withFailureHandler(showLoginError)
-                .getPortalData();
-        });
-    } else {
-        appShell.hidden = true;
-        loginGate.hidden = false;
-        loginButton.hidden = true;
-        loginMessage.textContent = 'Live payroll data is available only from the deployed Google Apps Script portal. This local page does not include employee records.';
+    appShell.hidden = true;
+    loginGate.hidden = false;
+    loginForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        loginButton.disabled = true;
+        loginButton.textContent = 'Signing in…';
         loginError.hidden = true;
+        try {
+            const result = await apiRequest('/api/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: document.getElementById('login-email').value,
+                    password: document.getElementById('login-password').value
+                })
+            });
+            csrfToken = result.csrfToken;
+            loginButton.textContent = 'Loading payroll data…';
+            const source = await apiRequest('/api/portal-data');
+            initialize(source);
+            document.getElementById('login-password').value = '';
+        } catch (error) {
+            document.getElementById('login-password').value = '';
+            showLoginError(error);
+        }
+    });
+
+    async function restoreSession() {
+        try {
+            const response = await fetch('/api/session', { credentials: 'same-origin' });
+            if (response.status === 401) return;
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Your portal session could not be restored.');
+            csrfToken = result.csrfToken;
+            const source = await apiRequest('/api/portal-data');
+            initialize(source);
+        } catch (error) {
+            showLoginError(error);
+        }
     }
+
+    restoreSession();
 })();

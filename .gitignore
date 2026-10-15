@@ -14,6 +14,7 @@ Desktop.ini
 *.pem
 *.key
 secrets/
+salary-processing/server/data/
 
 # Runtime and generated output
 logs/

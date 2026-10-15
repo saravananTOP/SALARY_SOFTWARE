@@ -1,52 +1,78 @@
 # SALARY_SOFTWARE
 
-A foundation for maintainable, auditable salary and payroll automation, including a Google Apps Script payroll portal connected to a protected Google Sheet.
+A locally authenticated payroll portal for maintaining employee records, entering attendance, calculating payroll, and retaining payroll history in SQLite.
+
+## Payroll portal
+
+The **Employees Pay Roll** portal supports **THE FLAVORS INDIA PVT LTD** and **THE SUPREME AROMATICS PVT LTD**, uses INR, and has no Google sign-in or Google Sheets runtime dependency. The supplied workbook is only a one-time migration source: the importer copies employee, attendance, settings, tax slabs, advances, and available payroll history into SQLite. The portal calculates and reads payroll data from SQLite after import.
+
+The portal provides a local email/password sign-in, employee directory, attendance and leave inputs, selected-employee payroll previews, reports, and paginated employee, leave, attendance, advances, salary, PF, ESI, bonus, gratuity, TDS, payslip, and history registers. Sensitive employee fields are masked server-side. Administrators can reveal protected values, review ESI coverage, and use the **Source data review** screen to enter and verify missing salary and leave data. Each correction is audited; payroll preview and archive remain blocked until required active employee data is complete. Administrators and payroll users can update attendance and archive periods; read-only users cannot write. There is no public account registration or bank-payment integration.
+
+### Monthly attendance, advances, and shared payroll rules
+
+In **Attendance & leave**, an administrator or payroll user can import a complete monthly roster as CSV or `.xlsx`. The portal previews the file without changing data; confirmation validates it again and saves every row together. The import must contain exactly one row for every active employee, with these headers: `EMP ID`, `WORK DAYS`, `LEAVE DAYS THIS MONTH`, `LONGEST CONTINUOUS SPELL`, `PROCESS ALLOWANCE`, `PUNCTUAL INCENTIVE`, and `FULL ATT. BONUS`. Blank incentive amounts mean zero. Duplicate, unknown, inactive, missing, or invalid employee rows are rejected, and archived months cannot be changed. A downloadable blank CSV template is provided in the portal.
+
+Administrators can add, update, or close employee advances and school loans in **Registers & rules**. Monthly deductions and balances feed future payroll calculations; archived payroll history remains unchanged. Administrators can also edit shared PF, ESI, bonus, gratuity, and related calculation assumptions under **Company settings**. The configured PF wage ceiling is the organization's approved ₹25,000 policy, not a claim about the current statutory ceiling. Health-insurance deductions remain a fixed amount per employee. Changes to employee fixed details and payroll data are administrator-controlled and audited. Confirm tax and statutory settings with the organization's accountant before relying on them.
+
+### Test on this machine
+
+1. Install Node.js 20 or newer.
+2. In `salary-processing/server/`, run `npm install`.
+3. Copy `.env.example` to `.env` and set a random `SESSION_SECRET` with at least 32 characters and the exact `APP_ORIGIN` used to open the portal. `DATABASE_PATH` defaults to `./data/portal.sqlite`.
+4. Create the first administrator with `npm run users -- create admin@example.com admin`. The CLI prompts for a password without echoing it.
+5. Import a synthetic or approved `.xlsx` source file and its validated leave-balance CSV as described below.
+6. Run `npm test`, then start the local portal with `npm start`. It listens on `127.0.0.1:3000` by default.
+
+### One-time workbook migration
+
+The importer accepts the source `.xlsx` workbook and, when available, a CSV containing exactly one validated opening leave-balance row for each imported employee. CSV columns are `employeeId,elBalance,clBalance`. Missing salary, leave entitlements, or unverified opening balances remain explicitly incomplete in the portal; an administrator must enter and confirm values against authoritative records in **Source data review** before payroll can be previewed or archived. The workbook's saved values and headers must be complete for required imported fields; formulas with no saved result are not treated as valid numbers. The importer derives calendar days from the payroll period and warns if the workbook's calendar-day setting disagrees. It refuses to overwrite a database that already contains imported employees.
+
+```powershell
+cd salary-processing/server
+npm run import-workbook -- "C:\secure\payroll-source.xlsx" --opening-balances "C:\secure\opening-balances.csv"
+```
+
+Keep the workbook, balances CSV, SQLite database, backups, and exports in restricted storage outside source control. Do not import real payroll data until employee mappings, opening balances, and the resulting calculations have been validated. Available archived payroll history is imported as-is; missing historical months are not reconstructed.
+
+### Deploy on the organization server
+
+Install Node.js 20+ on the target Windows or Linux server, copy the application, configure `.env`, create the first admin account, and perform the one-time import on that server. Use a persistent local disk for `DATABASE_PATH`; the default is `salary-processing/server/data/portal.sqlite`. Start one Node.js process with `npm start`, and place it behind the organization's HTTPS reverse proxy. Set `APP_ORIGIN` to the exact HTTPS portal origin and `TRUST_PROXY=true` when the proxy terminates TLS. Do not put a live SQLite database on a shared network drive or run multiple portal instances against the same file. If the organization later needs multiple application servers or heavier concurrent writes, migrate to a database service such as PostgreSQL.
+
+Local accounts are managed from `salary-processing/server/`:
+
+- Create: `npm run users -- create <email> <admin|payroll|read-only>`
+- Reset a password: `npm run users -- reset-password <email>`
+- Change a role: `npm run users -- set-role <email> <admin|payroll|read-only>`
+- Disable an account: `npm run users -- disable <email>`
+- List accounts: `npm run users -- list`
+
+The server rate-limits sign-in attempts, stores password hashes, uses HTTP-only same-site session cookies and CSRF/origin checks, and rechecks account status and role on each request. Revealing a protected value is audited without writing the value to the audit log. Restrict database and export access; back up SQLite regularly using a safe online backup or while the service is stopped.
+
+## Calculation scope and review
+
+The native payroll engine implements the rules documented in the supplied Payroll Read Me: CL/EL allocation and LOP, Fixed Allowance proration by work days/calendar days, PF/EPS/EPF, sticky ESI coverage periods, bonus and gratuity estimates, and the configured income-tax slabs. TDS and statutory values are estimates and require accountant review. Do not use the portal for production payroll until the organization validates the rules, all imported records, and results against approved examples. No formula parity with the workbook is claimed.
 
 ## Project principles
 
 - Treat payroll inputs and outputs as sensitive personal and financial data.
 - Make calculations deterministic, reviewable, and reproducible.
 - Use explicit validation, safe failure behavior, and auditable outcomes.
-- Keep jurisdiction-specific rules configurable and effective-dated. Obtain qualified review before relying on tax, statutory, or legal calculations.
+- Obtain qualified review before relying on tax, statutory, or legal calculations.
 - Never commit credentials, employee records, payslips, or production exports.
-
-## Payroll and employee portal
-
-The **Employees Pay Roll** portal supports **THE FLAVORS INDIA PVT LTD** and **THE SUPREME AROMATICS PVT LTD**, uses INR, and treats the linked Google Sheet as the source of truth. It includes an employee directory and profile, attendance inputs and leave balances, selected-employee salary previews, reports, and a paginated read-only browser for the employee, leave, attendance, advance, salary, PF, ESI, bonus, gratuity, TDS, payslip, history, and report registers. The register browser masks sensitive columns server-side. Payroll previews include only employees explicitly selected in the UI and use the workbook's calculated values.
-
-### Google Apps Script deployment
-
-1. Use a native Google Sheets workbook. If the source file is Excel (`.xlsx`), first convert a copy to Google Sheets and leave the original unchanged; Apps Script's Spreadsheet service requires a native Google Sheets file. Set the source workbook's sharing to **Restricted** and share only with named authorized Google accounts.
-2. Open the Apps Script project associated with the authorized native Google Sheet, or create a standalone Apps Script project.
-3. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\salary-processing\apps-script\build.ps1` from the repository root. This generates `salary-processing/apps-script/Index.html` by embedding the maintained HTML, CSS, and JavaScript. No synthetic employee data is included in the portal.
-4. Add `Code.gs`, generated `Index.html`, and `appsscript.json` from `salary-processing/apps-script/` to the Apps Script project. Keep these files synchronized with this repository.
-5. In Apps Script **Project Settings → Script Properties**, add `SPREADSHEET_ID` with the ID of the native Google Sheets copy. Optionally add `ALLOWED_EMAILS` as a comma- or semicolon-separated list of permitted Google account email addresses. Add `ADMIN_EMAILS` as a separate comma- or semicolon-separated list of administrators allowed to reveal full masked employee identifiers and bank/contact fields in a profile. Leave `ADMIN_EMAILS` unset until the portal administrator has explicitly authorized the accounts; without it, no portal user can reveal full values.
-6. Deploy as a web app with the manifest's **Execute as: User accessing the web app** and **Who has access: Anyone with a Google account** settings. Do not use anonymous access or execute as the deployer. The Google Sheet's own restricted permissions remain the data-access control; optionally use `ALLOWED_EMAILS` as an additional portal restriction.
-7. Open the deployed URL while signed in with an authorized Google account. Verify the company/staff classifications and workbook totals before relying on the portal.
-
-The backend never returns unmasked protected fields with the initial portal data. Full values are fetched only after an administrator clicks **Show value**; the server rechecks the signed-in account against `ADMIN_EMAILS`, and logs the reveal event without logging the value. Other users see masked values. The portal sign-out clears its displayed data and returns to the sign-in gate, but does not sign the user out of their Google account. The backend only updates designated monthly attendance input columns; formula-driven calculations remain in the workbook. The Apps Script checks expected headers and refuses previews with invalid calculated amounts. Google Sheets enforces edit permission when saving attendance; a user with view-only access will receive the Sheet's write-permission error. Keep the spreadsheet ID in Script Properties and never commit employee records, credentials, payroll exports, or production data to this repository. The local HTML page does not contain payroll records; live records are loaded only by the deployed Google Apps Script portal.
-
-**Workbook mapping and limitations:** `Employee Master - FA` is mapped to Flavors active staff, `Employee Master - FR` to Flavors retainers, and `Employee Master - SA` to Supreme retainers. Where the master has a date-of-birth field, age at joining is calculated server-side without sending the birth date; otherwise the portal displays the workbook's staff-type/group values and marks age unavailable. The connected workbook was checked against these tabs and the portal's attendance, leave, salary, history, and report column mappings. Its current `Settings!B4` is September 2026, while `Settings!B5` is 25 even though September has 30 calendar days. The portal displays this discrepancy and blocks payroll previews and attendance edits until the setting is corrected. Attendance and payroll formulas, statutory results, and historical values remain owned by the Sheet. The portal does not approve leave requests, archive payroll, reset monthly inputs, or initiate bank payments. Payslip and statutory registers are read-only. Treat authorized CSV exports as confidential.
 
 ## Repository layout
 
 ```text
-docs/          Architecture and engineering guidance
-scripts/       Operational and automation scripts
-salary-processing/ Google Sheets-backed payroll portal; local page requires deployed portal for data
-templates/     Reusable script design template
-tests/         Test strategy and test data guidance
+docs/                         Architecture and engineering guidance
+scripts/                      Operational and automation scripts
+salary-processing/            Payroll portal UI and local-account server
+salary-processing/server/      Node.js service, SQLite schema, and importer
+templates/                     Reusable script design template
+tests/                         Test strategy and test data guidance
 ```
-
-## Getting started
-
-1. Read [script authoring](docs/script-authoring.md) and [architecture](docs/architecture.md).
-2. Copy [the script specification](templates/script-spec.md) for each proposed automation.
-3. Agree on the language, runtime, dependency management, and CI commands before adding executable code.
-4. Review every change using the pull request template and test with synthetic data.
 
 ## Security and data handling
 
-Do not put real payroll data or secrets in source control, test fixtures, logs, screenshots, or issue reports. Use synthetic data for development and testing. Report security concerns privately to the repository maintainers rather than opening a public issue.
+Use synthetic data for development and testing. Keep real employee records, credentials, source workbooks, opening-balance files, exports, and database backups out of source control and test fixtures. Report security concerns privately to the repository maintainers rather than opening a public issue.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md) before contributing.
