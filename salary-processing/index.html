@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="Google-authenticated Employees Pay Roll portal connected to a protected Google Sheet.">
+    <title>Employees Pay Roll</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <section id="login-gate" class="login-gate" hidden aria-labelledby="login-title">
+        <div class="login-card">
+            <a class="brand login-brand" href="#" aria-label="Employees Pay Roll"><span class="brand-symbol">E</span><span class="brand-name">Employees Pay Roll<span>PAYROLL WORKSPACE</span></span></a>
+            <div class="login-shield" aria-hidden="true">✓</div>
+            <p class="eyebrow">SECURE PAYROLL WORKSPACE</p>
+            <h1 id="login-title">Sign in with Google</h1>
+            <p id="login-message" class="login-message">Use the Google account that has access to your payroll spreadsheet. Your account will be checked before employee and payroll data are loaded.</p>
+            <button id="google-login" class="button button-primary login-button" type="button">Continue with Google <span>→</span></button>
+            <p class="login-security"><span>⌑</span> Google verifies your account. This portal never asks for or stores your Google password.</p>
+            <p id="login-error" class="login-error" role="alert" hidden></p>
+        </div>
+        <p class="login-footnote">Authorized Google account and spreadsheet access required.</p>
+    </section>
+    <div id="app-shell" class="app-shell" hidden>
+        <aside class="sidebar">
+            <a class="brand" href="#dashboard" aria-label="Employees Pay Roll home">
+                <span class="brand-symbol">E</span><span class="brand-name">Employees Pay Roll<span>PAYROLL WORKSPACE</span></span>
+            </a>
+            <div class="workspace-switch"><span class="workspace-icon">P</span><span><small>WORKSPACE</small><strong>India Operations</strong></span><span class="chevron">⌄</span></div>
+            <p class="nav-label">WORKSPACE</p>
+            <nav class="main-nav" aria-label="Main navigation">
+                <button class="nav-item active" type="button" data-view="dashboard"><span class="nav-icon">◫</span> Overview</button>
+                <button class="nav-item" type="button" data-view="employees"><span class="nav-icon">♙</span> Employees <span id="employee-nav-count" class="nav-count">0</span></button>
+                <button class="nav-item" type="button" data-view="payroll"><span class="nav-icon">▤</span> Payroll</button>
+                <button class="nav-item" type="button" data-view="attendance"><span class="nav-icon">◷</span> Attendance & leave</button>
+                <button class="nav-item" type="button" data-view="reports"><span class="nav-icon">▥</span> Reports</button>
+                <button class="nav-item" type="button" data-view="registers"><span class="nav-icon">▤</span> Registers & rules</button>
+            </nav>
+            <p class="nav-label nav-label-bottom">ADMINISTRATION</p>
+            <nav class="main-nav">
+                <button class="nav-item" type="button" data-view="settings"><span class="nav-icon">⚙</span> Company settings</button>
+            </nav>
+            <div class="sidebar-tip"><span class="tip-icon">✦</span><strong>Payroll, made clearer.</strong><p>Review your team and prepare a payroll run company by company.</p></div>
+            <div class="profile"><span class="profile-avatar">AD</span><span class="profile-name"><strong>Alexandra Davis</strong><small>Payroll administrator</small></span><button aria-label="Profile options" class="profile-more">···</button></div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div class="breadcrumb"><span>India Operations</span><b>/</b><strong id="breadcrumb-current">Overview</strong></div>
+                <div class="top-actions"><span id="workspace-status" class="secure-pill"><i></i> Google account required</span><span class="top-divider"></span><span class="current-period" id="top-period">—</span><button id="account-button" class="top-avatar" type="button" aria-label="Account">G</button><button id="logout-button" class="button button-light logout-button" type="button" hidden>Sign out</button></div>
+            </header>
+
+            <section class="view active" id="view-dashboard" data-title="Overview">
+                <div class="welcome-row">
+                    <div><p class="eyebrow">PAYROLL OVERVIEW</p><h1>Employees Pay Roll</h1><p class="subheading">Workbook-backed payroll and employee records.</p></div>
+                    <button class="button button-primary" type="button" data-go="payroll"><span>＋</span> Start payroll run</button>
+                </div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Loading authorized payroll data from the connected Google Sheet.</span><button class="notice-close" aria-label="Dismiss notice" type="button">×</button></div>
+                <div class="company-strip" id="dashboard-companies"></div>
+                <div class="metric-grid">
+                    <article class="metric-card"><div class="metric-top"><span>PEOPLE IN YOUR WORKSPACE</span><span class="metric-icon lilac">♙</span></div><strong id="metric-employees">0</strong><small><span id="metric-active">0</span> active <i>·</i> <span id="metric-retainer">0</span> retainers</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>MONTHLY GROSS PAY</span><span class="metric-icon mint">₹</span></div><strong id="metric-pay">₹0</strong><small>From the source Salary Register</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>PAYROLL RUNS</span><span class="metric-icon peach">▤</span></div><strong id="metric-runs">0</strong><small>Archived groups in source history</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>REPORTED WORK DAYS</span><span class="metric-icon blue">◷</span></div><strong id="metric-attendance">0</strong><small>From the current Attendance sheet</small></article>
+                </div>
+                <div class="dashboard-grid">
+                    <article class="panel payroll-overview">
+                        <div class="panel-title-row"><div><h2>Payroll overview</h2><p>Monthly gross salary by company</p></div><span class="chart-caption"><i></i> Gross payroll</span></div>
+                        <div id="payroll-chart" class="chart-area" aria-label="Monthly base salary chart"></div>
+                        <div class="chart-foot"><span>October 2026 <b>·</b> INR</span><button class="inline-link" type="button" data-go="reports">View reports <span>→</span></button></div>
+                    </article>
+                    <article class="panel quick-actions">
+                        <div class="panel-title-row"><div><h2>Quick actions</h2><p>Common payroll tasks</p></div></div>
+                        <button id="quick-add-employee" type="button" data-go="employees" class="quick-action" hidden><span class="quick-icon lavender">＋</span><span><strong>Add an employee</strong><small>Maintain employee data in the source workbook</small></span><b>→</b></button>
+                        <button type="button" data-go="payroll" class="quick-action"><span class="quick-icon green">▤</span><span><strong>Prepare payroll</strong><small>Select who to include this month</small></span><b>→</b></button>
+                        <button type="button" data-go="attendance" class="quick-action"><span class="quick-icon orange">◷</span><span><strong>Review attendance</strong><small>Review inputs from the source workbook</small></span><b>→</b></button>
+                    </article>
+                </div>
+                <article class="panel recent-panel"><div class="panel-title-row"><div><h2>Recent payroll activity</h2><p>Payroll history from the source workbook</p></div><button class="inline-link" type="button" data-go="payroll">All payroll runs <span>→</span></button></div><div id="recent-runs"></div></article>
+            </section>
+
+            <section class="view" id="view-employees" data-title="Employees">
+                <div class="page-heading"><div><p class="eyebrow">PEOPLE DIRECTORY</p><h1>Employees</h1><p class="subheading">Employee records loaded from the authorized Google Sheet.</p></div><button class="button button-primary" id="add-employee-button" type="button" hidden><span>＋</span> Add employee</button></div>
+                <div class="metric-grid compact-metrics">
+                    <article class="metric-card"><div class="metric-top"><span>TOTAL EMPLOYEES</span><span class="metric-icon lilac">♙</span></div><strong id="employee-total">0</strong><small>Across both companies</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>ACTIVE STAFF</span><span class="metric-icon mint">✓</span></div><strong id="employee-active">0</strong><small>Joined before age 58</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>RETAINER STAFF</span><span class="metric-icon peach">◉</span></div><strong id="employee-retainer">0</strong><small>Joined at age 58 or above</small></article>
+                </div>
+                <article class="panel directory-panel">
+                    <div class="panel-title-row"><div><h2>All employees</h2><p>Employee details and monthly base salary</p></div><button id="export-employees" class="button button-light" type="button">↓ <span>Export CSV</span></button></div>
+                    <div class="filter-row">
+                        <label class="search-box"><span>⌕</span><input id="employee-search" type="search" placeholder="Search name, ID or role" aria-label="Search employees"></label>
+                        <label class="select-label"><span>Company</span><select id="employee-company-filter"><option value="all">All companies</option></select></label>
+                        <label class="select-label"><span>Staff type</span><select id="employee-type-filter"><option value="all">All staff types</option><option value="active">Active staff</option><option value="retainer">Retainer staff</option></select></label>
+                        <label class="select-label"><span>Status</span><select id="employee-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="on-leave">On leave</option></select></label>
+                    </div>
+                    <div class="table-scroll"><table><thead><tr><th>EMPLOYEE</th><th>COMPANY</th><th>DEPARTMENT</th><th>JOINING AGE</th><th>STAFF TYPE</th><th>STATUS</th><th class="align-right">MONTHLY BASE</th><th></th></tr></thead><tbody id="employee-table"></tbody></table><div id="employee-empty" class="empty-state" hidden>No employees match your search or filters.</div></div>
+                    <div class="table-foot"><span id="employee-result-count">Showing 0 employees</span><span class="classification-note">Retainer classification uses age at joining ≥ 58.</span></div>
+                </article>
+            </section>
+
+            <section class="view" id="view-payroll" data-title="Payroll">
+                <div class="page-heading"><div><p class="eyebrow">MONTHLY PAY CYCLE</p><h1>Payroll</h1><p class="subheading">Select employees manually to preview source-workbook payroll values.</p></div><label class="period-picker"><span>PAY PERIOD</span><input id="pay-period" type="month"></label></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Payroll previews use calculated source-register values for selected employees only. No money is transferred.</span></div>
+                <div class="metric-grid compact-metrics">
+                    <article class="metric-card"><div class="metric-top"><span>ELIGIBLE EMPLOYEES</span><span class="metric-icon lilac">♙</span></div><strong id="payroll-eligible">0</strong><small>Active employee records</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>SELECTED FOR THIS RUN</span><span class="metric-icon mint">✓</span></div><strong id="payroll-selected">0</strong><small>Only checked employees will be included</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>SELECTED BASE PAY</span><span class="metric-icon peach">₹</span></div><strong id="payroll-selected-total">₹0</strong><small>Reference amount in INR</small></article>
+                </div>
+                <article class="panel payroll-panel">
+                    <div class="panel-title-row"><div><h2>Select employees</h2><p>Selections stay with an employee as you change filters, until the page is reloaded.</p></div><span class="section-tag">SELECTED ONLY</span></div>
+                    <div class="filter-row payroll-filters">
+                        <label class="select-label"><span>Company</span><select id="payroll-company-filter"><option value="all">All companies</option></select></label>
+                        <label class="select-label"><span>Staff type</span><select id="payroll-type-filter"><option value="all">All staff types</option><option value="active">Active staff</option><option value="retainer">Retainer staff</option></select></label>
+                        <span id="payroll-visible-count" class="filter-count">Showing 0 employees</span>
+                    </div>
+                    <div class="table-scroll"><table><thead><tr><th class="check-cell"><input id="select-all-visible" type="checkbox" aria-label="Select all visible employees"></th><th>EMPLOYEE</th><th>COMPANY</th><th>AGE AT JOINING</th><th>STAFF TYPE</th><th class="align-right">MONTHLY BASE</th></tr></thead><tbody id="payroll-table"></tbody></table><div id="payroll-empty" class="empty-state" hidden>No employees match these filters.</div></div>
+                    <div class="table-foot"><span id="payroll-selection-caption">0 employees selected</span><button id="select-toggle" type="button" class="inline-link">Select all visible</button></div>
+                    <div id="payroll-result" class="payroll-result" role="status" aria-live="polite" hidden></div>
+                    <div class="run-footer"><span><b>!</b> Preview only; nothing is archived or paid.</span><button id="process-payroll" class="button button-primary" type="button" disabled>Prepare payroll preview <span>→</span></button></div>
+                </article>
+                <article class="panel runs-panel"><div class="panel-title-row"><div><h2>Payroll runs</h2><p>Run history for this browser session</p></div></div><div id="payroll-runs"></div></article>
+            </section>
+
+            <section class="view" id="view-attendance" data-title="Attendance & leave">
+                <div class="page-heading"><div><p class="eyebrow">TEAM TIME & LEAVE</p><h1>Attendance & leave</h1><p class="subheading">Review workbook attendance inputs, leave balances, and calculated deductions.</p></div><span class="section-tag">LIVE SHEET</span></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Attendance and leave values are loaded from the source workbook.</span></div>
+                <div class="metric-grid compact-metrics">
+                    <article class="metric-card"><div class="metric-top"><span>AVERAGE ATTENDANCE</span><span class="metric-icon lilac">◷</span></div><strong id="attendance-average">0%</strong><small>Based on source Attendance inputs</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>LEAVE REQUESTS</span><span class="metric-icon peach">▣</span></div><strong id="leave-pending">0</strong><small>Leave approvals are not connected</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>LEAVE DAYS USED</span><span class="metric-icon mint">✓</span></div><strong id="leave-used">0</strong><small>From source leave balances</small></article>
+                </div>
+                <article class="panel"><div class="panel-title-row"><div><h2>Monthly attendance inputs</h2><p>Update monthly inputs; the Google Sheet calculates LOP, CL/EL usage and deductions.</p></div><label class="select-label"><span>Company</span><select id="attendance-company-filter"><option value="all">All companies</option></select></label></div><div class="table-scroll"><table><thead><tr><th>EMPLOYEE</th><th>COMPANY / GROUP</th><th>WORK DAYS</th><th>LEAVE DAYS</th><th>LONGEST SPELL</th><th>LOP DAYS</th><th>LOP (₹)</th><th>PROCESS ALLOW. (₹)</th><th>PUNCTUAL (₹)</th><th>FULL ATT. (₹)</th><th>LATE DAYS</th><th>LATE DED. (₹)</th><th></th></tr></thead><tbody id="attendance-table"></tbody></table></div></article>
+                <article class="panel leave-panel"><div class="panel-title-row"><div><h2>Leave balances</h2><p>Calendar-year CL/EL entitlements and balances from Leave Master</p></div></div><div id="leave-list"></div></article>
+            </section>
+
+            <section class="view" id="view-registers" data-title="Registers & rules">
+                <div class="page-heading"><div><p class="eyebrow">SOURCE WORKBOOK</p><h1>Registers & payroll rules</h1><p class="subheading">Browse the authorized workbook registers; formula calculations remain in Google Sheets.</p></div><a id="source-workbook-link" class="button button-light" href="#" target="_blank" rel="noopener noreferrer" hidden>Open source workbook ↗</a></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Register values are read-only here. Sensitive columns stay masked; only configured administrators can reveal them in an employee profile. Nothing in this view archives payroll or initiates payments.</span></div>
+                <article class="panel register-panel">
+                    <div class="panel-title-row"><div><h2 id="register-title">Salary Register</h2><p id="register-caption">Workbook-calculated salary and statutory values</p></div><div class="register-toolbar"><label class="select-label"><span>Workbook tab</span><select id="register-select"></select></label><button id="export-register" class="button button-light" type="button" disabled>↓ Export page</button></div></div>
+                    <p id="register-feedback" class="register-feedback" role="status" aria-live="polite"></p>
+                    <div class="table-scroll register-table-scroll"><table><thead id="register-head"></thead><tbody id="register-body"></tbody></table></div>
+                    <div class="table-foot"><span id="register-page-status">Choose a register to load source data.</span><span class="register-pagination"><button id="register-previous" class="button button-light" type="button" disabled>← Previous</button><button id="register-next" class="button button-light" type="button" disabled>Next →</button></span></div>
+                </article>
+                <article class="panel settings-panel">
+                    <div class="panel-title-row"><div><h2>Workbook payroll workflow</h2><p>Review-only guidance based on the source workbook instructions.</p></div></div>
+                    <dl class="settings-rules">
+                        <div><dt>Payroll period</dt><dd>Settings controls the month and calendar-day count used by formulas.</dd></div>
+                        <div><dt>Attendance & loss of pay</dt><dd>Monthly work, leave, continuous-spell, incentive and late inputs feed the workbook's LOP and deduction formulas.</dd></div>
+                        <div><dt>Leave usage</dt><dd>Casual leave is used before earned leave; after three continuous leave days, day four onward uses earned leave.</dd></div>
+                        <div><dt>LOP calculation</dt><dd>Loss-of-pay amount follows the workbook formula: LOP days × Basic ÷ 30.</dd></div>
+                        <div><dt>Statutory review</dt><dd>PF, ESI, bonus, gratuity and TDS are presented from their separate workbook registers; verify applicable law and source formulas.</dd></div>
+                        <div><dt>Payroll payment date</dt><dd>The workbook guidance schedules salary payment for the fifth of the following month. This portal does not initiate payment.</dd></div>
+                        <div><dt>ESI review windows</dt><dd>April–September and October–March.</dd></div>
+                        <div><dt>Month close</dt><dd>Archiving and monthly resets remain manual workbook-owner actions and are not performed by this portal.</dd></div>
+                    </dl>
+                </article>
+            </section>
+
+            <section class="view" id="view-reports" data-title="Reports">
+                <div class="page-heading"><div><p class="eyebrow">PAYROLL INSIGHTS</p><h1>Reports & exports</h1><p class="subheading">Review authorized workbook summaries and export source data as CSV.</p></div><span class="section-tag">AUTHORIZED DATA</span></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Exports contain authorized employee and payroll data. Handle downloaded files as confidential.</span></div>
+                <div class="report-grid">
+                    <article class="panel report-card"><span class="report-icon lilac">₹</span><h2>Monthly salary summary</h2><p>Employee count and payroll values from the workbook report register.</p><button id="export-salary-report" class="button button-light" type="button">↓ Export salary CSV</button></article>
+                    <article class="panel report-card"><span class="report-icon mint">♙</span><h2>Employee directory</h2><p>Company, department, joining age, staff classification, status, and monthly base pay.</p><button id="export-directory-report" class="button button-light" type="button">↓ Export directory CSV</button></article>
+                    <article class="panel report-card"><span class="report-icon peach">▤</span><h2>Payroll run history</h2><p>Archived payroll history from the source workbook.</p><button id="export-runs-report" class="button button-light" type="button">↓ Export runs CSV</button></article>
+                </div>
+                <article class="panel report-breakdown"><div class="panel-title-row"><div><h2>Company salary summary</h2><p>Workbook payroll totals in Indian rupees</p></div></div><div id="company-summary"></div></article>
+            </section>
+
+            <section class="view" id="view-settings" data-title="Company settings">
+                <div class="page-heading"><div><p class="eyebrow">ORGANIZATION PROFILE</p><h1>Company settings</h1><p class="subheading">Workbook-backed company information and payroll guidance.</p></div></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Payroll policy and calculations remain in the source workbook.</span></div>
+                <article class="panel settings-panel"><div class="panel-title-row"><div><h2>Companies</h2><p>Companies represented in the authorized employee masters</p></div></div><div id="settings-companies" class="settings-company-list"></div></article>
+                <article class="panel settings-panel"><div class="panel-title-row"><div><h2>Payroll source and workflow</h2><p>Workbook calculations remain the source of truth.</p></div></div><dl class="settings-rules"><div><dt>Currency</dt><dd>Indian Rupee (INR, ₹)</dd></div><div><dt>Retainer classification</dt><dd>Age at joining is 58 years or above</dd></div><div><dt>Payroll preview</dt><dd>Selected employees only; source register values</dd></div><div><dt>Tax and statutory deductions</dt><dd>Calculated by workbook formulas</dd></div><div><dt>Persistence</dt><dd>Employee and payroll records stay in the authorized Google Sheet</dd></div><div><dt>Current payroll period</dt><dd id="setting-pay-period">—</dd></div><div><dt>Calendar days in period</dt><dd id="setting-calendar-days">—</dd></div></dl></article>
+            </section>
+
+            <footer class="app-footer"><span>EMPLOYEES PAY ROLL <i>·</i> PEOPLE & PAYROLL</span><span>Google Sheets source · Amounts in INR</span></footer>
+        </main>
+    </div>
+
+    <dialog id="employee-dialog" class="employee-dialog">
+        <form id="employee-form">
+            <div class="dialog-heading"><div><p class="eyebrow">EMPLOYEE DIRECTORY</p><h2 id="dialog-title">Employee details</h2><p>Employee records are maintained in the source workbook.</p></div><button class="dialog-close" type="button" aria-label="Close">×</button></div>
+            <input id="form-original-id" type="hidden">
+            <div class="form-grid">
+                <label>Employee ID<input id="form-id" name="id" required maxlength="20" placeholder="e.g. TF-1005"></label>
+                <label>Full name<input id="form-name" name="name" required maxlength="80" placeholder="Employee name"></label>
+                <label class="form-wide">Company<select id="form-company" name="companyId" required></select></label>
+                <label>Department<input id="form-department" name="department" required maxlength="50" placeholder="e.g. Finance"></label>
+                <label>Job title<input id="form-title" name="title" required maxlength="60" placeholder="e.g. Analyst"></label>
+                <label>Age at joining<input id="form-age" name="ageAtJoining" type="number" min="18" max="100" required></label>
+                <label>Joining date<input id="form-join-date" name="joiningDate" type="date" required></label>
+                <label class="form-wide">Monthly base salary (₹)<input id="form-salary" name="baseSalary" type="number" min="1" step="1" required></label>
+                <label class="form-wide">Employment status<select id="form-status" name="status"><option value="active">Active</option><option value="on-leave">On leave</option></select></label>
+            </div>
+            <p id="form-error" class="form-error" role="alert" hidden></p>
+            <div class="dialog-actions"><button class="button button-light dialog-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save employee</button></div>
+        </form>
+    </dialog>
+    <dialog id="employee-detail-dialog" class="employee-dialog detail-dialog">
+        <div class="detail-dialog-content">
+            <div class="dialog-heading"><div><p class="eyebrow">EMPLOYEE RECORD</p><h2 id="employee-detail-title">Employee details</h2><p id="employee-detail-subtitle">Protected workbook information</p></div><button id="employee-detail-close" class="dialog-close" type="button" aria-label="Close">×</button></div>
+            <div id="employee-detail-fields" class="employee-detail-fields"></div>
+            <section class="protected-section"><div><h3>Protected information</h3><p>Masked by default. Full values are returned only after a configured administrator requests them.</p></div><div id="employee-protected-fields" class="protected-fields"></div></section>
+            <p id="employee-detail-feedback" class="form-error" role="alert" hidden></p>
+        </div>
+    </dialog>
+</body>
+</html>

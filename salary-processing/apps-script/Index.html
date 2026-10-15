@@ -1,0 +1,1655 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="Google-authenticated Employees Pay Roll portal connected to a protected Google Sheet.">
+    <title>Employees Pay Roll</title>
+<style>
+:root {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #20233a;
+    background: #f6f7fb;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    --muted: #84879c;
+    --line: #eceef4;
+    --purple: #6656d9;
+    --ink: #20233a;
+    --green: #278a69;
+}
+
+* { box-sizing: border-box; }
+body { min-width: 360px; margin: 0; background: #f6f7fb; }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, a:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid #bcb4fa; outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.login-gate { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 25%, #fff 0, #f4f2ff 42%, #eff1f8 100%); }
+.login-card { width: min(390px, 100%); padding: 30px; border: 1px solid #e9e8f2; border-radius: 14px; background: #fff; box-shadow: 0 16px 50px #28234512; text-align: center; }
+.login-brand { justify-content: center; margin: 0 0 27px; text-align: left; }
+.login-shield { display: grid; width: 48px; height: 48px; margin: 0 auto 15px; place-items: center; border-radius: 15px; background: #eeecff; color: #6555d5; font-size: 19px; }
+.login-card .eyebrow { margin-bottom: 7px; }
+.login-card h1 { font-size: 21px; }
+.login-message { margin: 9px 0 19px; color: #85879b; font-size: 10px; line-height: 1.7; }
+.login-button { width: 100%; min-height: 40px; font-size: 11px; }
+.login-button span { margin-left: auto; }
+.login-security { margin: 16px 0 0; color: #9596a7; font-size: 8px; line-height: 1.6; }
+.login-security span { margin-right: 4px; color: #4a9c75; }
+.login-error { margin: 13px 0 0; padding: 10px; border: 1px solid #f1dddd; border-radius: 6px; background: #fff8f8; color: #9b4545; font-size: 9px; line-height: 1.55; }
+.login-footnote { position: fixed; bottom: 17px; margin: 0; color: #999aab; font-size: 8px; }
+.server-warning { display: block; margin-top: 5px; color: #a36b2d; font-weight: 600; }
+.attendance-input { width: 58px; height: 27px; padding: 0 5px; border: 1px solid #e6e7ef; border-radius: 5px; color: #55576d; font-size: 9px; text-align: right; }
+.attendance-input.money-input { width: 82px; }
+.attendance-save { min-width: 45px; padding: 5px 6px; border: 0; border-radius: 5px; background: #f0efff; color: #6252cc; font-size: 8px; font-weight: 650; }
+.attendance-save:disabled { cursor: not-allowed; background: #f3f3f6; color: #a3a4b1; }
+.attendance-feedback { display: block; max-width: 160px; margin-top: 3px; color: #4a906d; font-size: 8px; white-space: normal; }
+
+.app-shell { min-height: 100vh; }
+.sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 3;
+    display: flex;
+    width: 248px;
+    flex-direction: column;
+    padding: 26px 16px 14px;
+    border-right: 1px solid #eaebf1;
+    background: #fff;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin: 0 0 28px 4px; color: var(--ink); text-decoration: none; }
+.brand-symbol { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 12px; background: linear-gradient(145deg, #7869e8, #5a49c9); color: white; font: 800 25px Georgia, serif; }
+.brand-name { font-size: 18px; font-weight: 750; letter-spacing: -.7px; }
+.brand-name span { display: block; margin-top: 1px; color: #a0a1b1; font-size: 7px; font-weight: 700; letter-spacing: 1.65px; }
+.workspace-switch { display: flex; align-items: center; gap: 10px; padding: 11px 9px; border: 1px solid #ececf3; border-radius: 9px; background: #fbfbfd; }
+.workspace-icon { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: #e9e6fd; color: #6051ce; font-size: 12px; font-weight: 700; }
+.workspace-switch small, .workspace-switch strong { display: block; }
+.workspace-switch small { margin-bottom: 3px; color: #a0a1b1; font-size: 8px; font-weight: 700; letter-spacing: .8px; }
+.workspace-switch strong { max-width: 143px; overflow: hidden; color: #42445b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.chevron { margin-left: auto; color: #999aac; font-size: 14px; }
+.nav-label { margin: 29px 10px 10px; color: #a4a5b4; font-size: 8px; font-weight: 700; letter-spacing: 1.2px; }
+.main-nav { display: grid; gap: 3px; }
+.nav-item { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 11px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: #77798f; font-size: 11px; text-align: left; }
+.nav-item:hover { background: #f8f7ff; color: #5e50c8; }
+.nav-item.active { background: #f0efff; color: #5c4dcc; font-weight: 650; }
+.nav-icon { width: 17px; color: #9698aa; font-size: 16px; text-align: center; }
+.nav-item.active .nav-icon { color: #6656d9; }
+.nav-count { margin-left: auto; padding: 3px 6px; border-radius: 10px; background: #f0efff; color: #6555d5; font-size: 9px; }
+.nav-label-bottom { margin-top: 23px; }
+.sidebar-tip { margin-top: auto; padding: 13px 12px; border: 1px solid #eeeafa; border-radius: 9px; background: linear-gradient(145deg, #faf9ff, #f5f3ff); }
+.tip-icon { display: block; margin-bottom: 6px; color: #7666dc; font-size: 15px; }
+.sidebar-tip strong { color: #42435e; font-size: 10px; }
+.sidebar-tip p { margin: 5px 0 0; color: #8a8ba0; font-size: 9px; line-height: 1.55; }
+.profile { display: flex; align-items: center; gap: 9px; margin-top: 13px; padding: 12px 1px 0; border-top: 1px solid #f0f0f5; }
+.profile-avatar, .top-avatar { display: grid; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #f1e6de; color: #85604c; font-size: 9px; font-weight: 700; }
+.profile-avatar { width: 31px; height: 31px; }
+.profile-name strong, .profile-name small { display: block; }
+.profile-name strong { font-size: 9px; }
+.profile-name small { margin-top: 3px; color: #999aac; font-size: 8px; }
+.profile-more { margin-left: auto; border: 0; background: transparent; color: #898b9d; font-size: 17px; }
+.logout-button { min-height: 29px; padding: 0 9px; font-size: 9px; }
+
+.main-content { min-height: 100vh; margin-left: 248px; padding: 0 39px 22px; }
+.topbar { display: flex; height: 61px; align-items: center; justify-content: space-between; border-bottom: 1px solid #eceef4; }
+.breadcrumb { color: #9698aa; font-size: 10px; }
+.breadcrumb b { margin: 0 9px; color: #c3c4cf; font-weight: 400; }
+.breadcrumb strong { color: #51536b; font-weight: 600; }
+.top-actions { display: flex; align-items: center; gap: 13px; }
+.secure-pill { padding: 6px 9px; border: 1px solid #e9eee9; border-radius: 20px; background: #f5faf6; color: #4e8a69; font-size: 9px; }
+.secure-pill i { display: inline-block; width: 6px; height: 6px; margin: 0 4px 1px 0; border-radius: 50%; background: #55b781; }
+.top-divider { width: 1px; height: 20px; background: #e9eaf0; }
+.current-period { color: #67697f; font-size: 10px; }
+.top-avatar { width: 29px; height: 29px; border: 0; }
+.view { display: none; padding-top: 24px; }
+.view.active { display: block; }
+.welcome-row, .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 17px; }
+.eyebrow { margin: 0 0 6px; color: #9698aa; font-size: 8px; font-weight: 700; letter-spacing: 1.15px; }
+h1 { margin: 0; color: #25273e; font-size: 23px; font-weight: 700; letter-spacing: -.75px; }
+.wave { color: #e4ac55; font-size: 16px; vertical-align: 2px; }
+.subheading { margin: 5px 0 0; color: #85879b; font-size: 10px; }
+.page-heading { margin-bottom: 18px; }
+.button { display: inline-flex; min-height: 35px; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 1px solid transparent; border-radius: 6px; font-size: 10px; font-weight: 650; white-space: nowrap; }
+.button-primary { background: #6656d9; color: white; box-shadow: 0 3px 7px #6555d921; }
+.button-primary:hover:not(:disabled) { background: #5747c9; }
+.button-primary:disabled { cursor: not-allowed; background: #bcb8de; box-shadow: none; }
+.button-light { border-color: #e7e8ef; background: white; color: #606279; }
+.button-light:hover { border-color: #c7c2ed; color: #5c4dcc; }
+
+.notice-bar { display: flex; align-items: center; gap: 9px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid #ebe8fa; border-radius: 7px; background: #f8f7ff; color: #72738a; font-size: 9px; line-height: 1.55; }
+.notice-bar strong { color: #4e4a85; }
+.notice-icon { color: #7264d8; font-size: 13px; }
+.notice-close { margin-left: auto; border: 0; background: none; color: #9293a4; font-size: 16px; }
+.company-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin-bottom: 13px; }
+.company-card { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 12px; border: 1px solid #ececf3; border-radius: 8px; background: #fff; }
+.company-marker { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border-radius: 9px; color: #6355ca; font-size: 11px; font-weight: 700; }
+.company-color-0 { background: #eeeafd; }
+.company-color-1 { background: #e6f4ed; color: #3b8968; }
+.company-card-details { min-width: 0; }
+.company-card-details strong, .company-card-details small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.company-card-details strong { color: #45475e; font-size: 9px; }
+.company-card-details small { margin-top: 4px; color: #9697a8; font-size: 9px; }
+.company-card-arrow { margin-left: auto; color: #a5a6b5; font-size: 13px; }
+
+.metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; margin-bottom: 14px; }
+.metric-card { min-width: 0; padding: 13px 14px 12px; border: 1px solid #ececf3; border-radius: 8px; background: #fff; }
+.metric-top { display: flex; align-items: center; justify-content: space-between; gap: 5px; color: #9294a6; font-size: 7px; font-weight: 700; letter-spacing: .65px; }
+.metric-icon { display: grid; width: 27px; height: 27px; flex: 0 0 auto; place-items: center; border-radius: 8px; font-size: 12px; }
+.lilac { background: #f0edff; color: #6555d4; }
+.mint { background: #e9f7ef; color: #3c9a71; }
+.peach { background: #fff3e7; color: #d89747; }
+.blue { background: #eaf2ff; color: #5484cb; }
+.metric-card > strong { display: block; overflow: hidden; margin-top: 9px; color: #292b42; font-size: clamp(19px, 2vw, 23px); font-weight: 700; letter-spacing: -.7px; text-overflow: ellipsis; white-space: nowrap; }
+.metric-card > small { display: block; overflow: hidden; margin-top: 4px; color: #9496a7; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.metric-card > small i { margin: 0 3px; color: #c5c5d0; font-style: normal; }
+.compact-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
+.compact-metrics .metric-card { padding: 12px 15px; }
+
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(235px, .9fr); gap: 12px; margin-bottom: 13px; }
+.panel { min-width: 0; margin-bottom: 13px; padding: 15px; border: 1px solid #ececf3; border-radius: 8px; background: #fff; }
+.panel-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.panel-title-row h2, .report-card h2 { margin: 0; color: #383a51; font-size: 12px; font-weight: 700; }
+.panel-title-row p { margin: 4px 0 0; color: #9294a5; font-size: 9px; }
+.chart-caption { color: #9698a9; font-size: 8px; }
+.chart-caption i { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #7768df; }
+.chart-area { display: flex; height: 145px; align-items: flex-end; justify-content: space-around; gap: 25px; padding: 14px 12px 0; border-bottom: 1px solid #eff0f5; background: repeating-linear-gradient(to bottom, transparent 0, transparent 35px, #f2f2f7 36px); }
+.chart-group { display: flex; width: 45%; height: 100%; align-items: center; flex-direction: column; justify-content: flex-end; }
+.chart-amount { margin-bottom: 5px; color: #6f7186; font-size: 9px; }
+.chart-bar-track { display: flex; width: min(58px, 47%); height: 90px; align-items: flex-end; justify-content: center; }
+.chart-bar-fill { display: block; width: 100%; min-height: 8px; border-radius: 5px 5px 0 0; background: linear-gradient(180deg, #9185ed, #6656d9); }
+.chart-group:nth-child(2) .chart-bar-fill { background: linear-gradient(180deg, #83c6a5, #43a47b); }
+.chart-company { overflow: hidden; width: 100%; margin: 7px 0 8px; color: #85879a; font-size: 8px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.chart-foot { display: flex; justify-content: space-between; margin-top: 9px; color: #9899a9; font-size: 8px; }
+.chart-foot b { margin: 0 4px; color: #c2c3cd; }
+.inline-link { padding: 3px 0; border: 0; background: transparent; color: #6555ce; font-size: 9px; font-weight: 600; }
+.inline-link span { margin-left: 4px; }
+.quick-actions { padding-bottom: 5px; }
+.quick-actions .panel-title-row { margin-bottom: 6px; }
+.quick-action { display: flex; width: 100%; align-items: center; gap: 9px; padding: 10px 0; border: 0; border-top: 1px solid #f2f2f6; background: transparent; text-align: left; }
+.quick-icon { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 8px; font-size: 12px; }
+.lavender { background: #f0edff; color: #695bd1; }
+.green { background: #e9f7ef; color: #469779; }
+.orange { background: #fff3e7; color: #d89543; }
+.quick-action > span:nth-child(2) { min-width: 0; }
+.quick-action strong, .quick-action small { display: block; }
+.quick-action strong { color: #4b4d63; font-size: 9px; }
+.quick-action small { margin-top: 3px; color: #999aab; font-size: 8px; }
+.quick-action > b { margin-left: auto; color: #a4a5b3; font-size: 11px; }
+.recent-panel { padding-bottom: 5px; }
+.activity-row { display: flex; min-width: 0; align-items: center; gap: 9px; padding: 9px 0; border-top: 1px solid #f1f1f6; }
+.activity-icon { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: #f0edff; color: #6555d4; font-size: 12px; }
+.activity-info { min-width: 0; flex: 1; }
+.activity-info strong, .activity-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.activity-info strong { color: #484a60; font-size: 9px; }
+.activity-info small { margin-top: 3px; color: #9697a7; font-size: 8px; }
+.activity-amount { color: #55566c; font-size: 9px; white-space: nowrap; }
+.status-tag { display: inline-flex; align-items: center; padding: 4px 7px; border-radius: 20px; font-size: 8px; font-weight: 600; white-space: nowrap; }
+.status-tag.active, .status-tag.prepared { background: #eaf7ef; color: #398663; }
+.status-tag.retainer { background: #fff3e5; color: #b67a32; }
+.status-tag.on-leave { background: #fff3e8; color: #bb7932; }
+.status-tag.pending { background: #f1efff; color: #6254c5; }
+.period-picker { display: grid; gap: 5px; color: #9697a8; font-size: 8px; font-weight: 700; letter-spacing: .8px; }
+.period-picker input { padding: 8px 9px; border: 1px solid #e7e8ef; border-radius: 6px; color: #55566d; font-size: 10px; }
+.section-tag { padding: 5px 8px; border-radius: 5px; background: #f3f1ff; color: #6254cb; font-size: 8px; font-weight: 700; letter-spacing: .5px; white-space: nowrap; }
+
+.directory-panel, .payroll-panel { padding: 0; }
+.directory-panel > .panel-title-row, .payroll-panel > .panel-title-row, .panel > .panel-title-row { padding: 15px 15px 0; }
+.filter-row { display: flex; align-items: flex-end; gap: 9px; padding: 0 15px 13px; }
+.search-box { display: flex; min-width: 165px; height: 32px; flex: 1; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid #e8e9f0; border-radius: 6px; color: #9294a7; }
+.search-box > span { font-size: 17px; }
+.search-box input { width: 100%; border: 0; outline: 0; color: #4a4c62; font-size: 9px; }
+.search-box input::placeholder { color: #a5a6b4; }
+.select-label { display: grid; min-width: 110px; gap: 4px; color: #9294a6; font-size: 8px; }
+.select-label select { height: 32px; padding: 0 26px 0 8px; border: 1px solid #e8e9f0; border-radius: 6px; background: #fff; color: #57596f; font-size: 9px; }
+.table-scroll { overflow-x: auto; border-top: 1px solid #eff0f5; }
+table { width: 100%; min-width: 690px; border-collapse: collapse; text-align: left; }
+thead { background: #fafafd; }
+th { height: 34px; color: #999bab; font-size: 7px; font-weight: 700; letter-spacing: .65px; white-space: nowrap; }
+th, td { padding: 0 9px; }
+th:first-child, td:first-child { padding-left: 15px; }
+td { height: 52px; border-top: 1px solid #f1f2f6; color: #62647a; font-size: 9px; white-space: nowrap; }
+tbody tr:hover { background: #fcfcff; }
+.person-cell { display: flex; min-width: 130px; align-items: center; gap: 8px; }
+.person-avatar { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 9px; color: #6658ae; font-size: 8px; font-weight: 700; }
+.person-identity { min-width: 0; }
+.person-identity strong, .person-identity small { display: block; overflow: hidden; text-overflow: ellipsis; }
+.person-identity strong { max-width: 145px; color: #45475d; font-size: 9px; font-weight: 650; }
+.person-identity small { margin-top: 3px; color: #a0a1b0; font-size: 8px; }
+.company-cell { max-width: 145px; overflow: hidden; color: #64667b; text-overflow: ellipsis; }
+.align-right { text-align: right; }
+.amount-cell { color: #46485f; font-weight: 650; }
+.row-action { padding: 4px 6px; border: 0; background: none; color: #6555cb; font-size: 8px; font-weight: 600; }
+.row-action:hover { text-decoration: underline; }
+.table-foot { display: flex; min-height: 38px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 15px; border-top: 1px solid #eff0f5; color: #9293a4; font-size: 8px; }
+.classification-note { color: #a1a2b1; text-align: right; }
+.empty-state { padding: 27px 12px; color: #8d8fa0; font-size: 10px; text-align: center; }
+input[type="checkbox"] { width: 14px; height: 14px; margin: 0; accent-color: #6656d9; vertical-align: middle; cursor: pointer; }
+.check-cell { width: 35px; }
+.payroll-filters { align-items: flex-end; }
+.filter-count { margin: 0 0 8px auto; color: #9697a7; font-size: 9px; }
+.payroll-result { margin: 0 15px 10px; padding: 10px 11px; border: 1px solid #dcefe4; border-radius: 6px; background: #f4fbf6; color: #548069; font-size: 9px; line-height: 1.6; }
+.payroll-result strong { color: #347953; }
+.run-footer { display: flex; min-height: 56px; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 15px; border-top: 1px solid #eff0f5; }
+.run-footer > span { color: #9092a2; font-size: 8px; }
+.run-footer > span b { display: inline-grid; width: 14px; height: 14px; margin-right: 4px; place-items: center; border-radius: 50%; background: #f2f0ff; color: #6656d9; font-size: 9px; }
+.runs-panel { margin-top: 14px; padding-bottom: 5px; }
+.runs-panel > .panel-title-row { padding: 0; }
+
+.attendance-progress { display: inline-block; width: 67px; height: 5px; overflow: hidden; margin-right: 7px; border-radius: 5px; background: #eeeeF4; vertical-align: middle; }
+.attendance-progress span { display: block; height: 100%; border-radius: inherit; background: #61b58e; }
+.attendance-rate { color: #77798c; font-size: 8px; }
+.leave-panel { margin-top: 14px; padding-bottom: 5px; }
+.leave-panel > .panel-title-row { padding: 0; }
+.leave-row { display: flex; align-items: center; gap: 9px; padding: 10px 0; border-top: 1px solid #f0f1f5; }
+.leave-info { min-width: 0; flex: 1; }
+.leave-info strong, .leave-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leave-info strong { color: #4a4c62; font-size: 9px; }
+.leave-info small { margin-top: 4px; color: #999aab; font-size: 8px; }
+
+.report-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px; margin-bottom: 14px; }
+.report-card { display: flex; min-height: 174px; align-items: flex-start; flex-direction: column; margin: 0; }
+.report-icon { display: grid; width: 32px; height: 32px; margin-bottom: 12px; place-items: center; border-radius: 9px; font-size: 13px; }
+.report-card h2 { margin-bottom: 5px; }
+.report-card p { min-height: 34px; margin: 0 0 13px; color: #9294a5; font-size: 9px; line-height: 1.5; }
+.report-card .button { margin-top: auto; }
+.report-breakdown { padding-bottom: 5px; }
+.summary-line { display: flex; align-items: center; gap: 15px; padding: 12px 0; border-top: 1px solid #f0f1f5; }
+.summary-line strong { color: #4d4f65; font-size: 9px; }
+.summary-line > span { color: #9697a7; font-size: 9px; }
+.summary-line-amount { margin-left: auto; }
+.settings-panel { padding-bottom: 5px; }
+.settings-panel > .panel-title-row { padding: 0; }
+.settings-company { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid #f0f1f5; }
+.settings-company > strong { color: #4d4f65; font-size: 9px; }
+.settings-company-count { margin-left: auto; color: #9697a7; font-size: 8px; }
+.settings-rules { margin: 0; }
+.settings-rules > div { display: flex; justify-content: space-between; gap: 20px; padding: 11px 0; border-top: 1px solid #f0f1f5; }
+.settings-rules dt { color: #77798e; font-size: 9px; }
+.settings-rules dd { margin: 0; color: #4d4f65; font-size: 9px; text-align: right; }
+.register-panel { padding: 0; }
+.register-panel > .panel-title-row { align-items: flex-end; padding: 17px 17px 0; }
+.register-toolbar, .register-pagination { display: flex; align-items: flex-end; gap: 8px; }
+.register-toolbar .select-label { min-width: 210px; }
+.register-toolbar .button, .register-pagination .button { min-height: 32px; }
+.register-feedback { margin: 10px 17px 0; color: #a34343; font-size: 10px; }
+.register-table-scroll { max-height: 64vh; overflow: auto; }
+.register-table-scroll table { min-width: 850px; }
+.register-table-scroll th { position: sticky; top: 0; z-index: 1; background: #fbfbfd; }
+.register-row-number { color: #999aac; font-variant-numeric: tabular-nums; }
+.register-pagination { align-items: center; }
+.employee-detail-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.employee-detail-item { display: grid; gap: 4px; padding: 9px; border: 1px solid #eff0f5; border-radius: 6px; }
+.employee-detail-item span, .protected-field > span { color: #8a8b9d; font-size: 8px; }
+.employee-detail-item strong { color: #46485e; font-size: 10px; overflow-wrap: anywhere; }
+.protected-section { margin-top: 17px; padding-top: 14px; border-top: 1px solid #eff0f5; }
+.protected-section h3 { margin: 0; color: #45475c; font-size: 11px; }
+.protected-section p { margin: 5px 0 10px; color: #898a9b; font-size: 9px; line-height: 1.5; }
+.protected-fields { display: grid; gap: 7px; }
+.protected-field { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px; border: 1px solid #eff0f5; border-radius: 6px; }
+.protected-value { color: #4b4d62; font-family: Consolas, monospace; font-size: 10px; letter-spacing: .4px; overflow-wrap: anywhere; }
+.protected-reveal { min-height: 28px; padding: 0 8px; font-size: 8px; }
+.protected-reveal:disabled { cursor: not-allowed; opacity: .65; }
+
+.app-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 19px; padding-top: 12px; border-top: 1px solid #eaebf1; color: #a0a1af; font-size: 7px; letter-spacing: .4px; }
+.app-footer i { margin: 0 4px; color: #c6c6d0; font-style: normal; }
+
+.employee-dialog { width: min(520px, calc(100% - 28px)); max-height: min(90vh, 780px); overflow-y: auto; padding: 0; border: 1px solid #e8e8ef; border-radius: 12px; background: #fff; box-shadow: 0 20px 70px #25243b33; }
+.employee-dialog::backdrop { background: #1f20364d; backdrop-filter: blur(2px); }
+.employee-dialog form { padding: 21px; }
+.dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 17px; }
+.dialog-heading h2 { margin: 0; color: #34364c; font-size: 17px; }
+.dialog-heading p:last-child { margin: 5px 0 0; color: #9293a3; font-size: 9px; }
+.dialog-close { width: 27px; height: 27px; border: 0; border-radius: 6px; background: #f5f5f8; color: #77788b; font-size: 18px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.form-grid label { display: grid; gap: 5px; color: #696b80; font-size: 9px; font-weight: 600; }
+.form-grid input, .form-grid select { width: 100%; height: 34px; padding: 0 9px; border: 1px solid #e5e6ee; border-radius: 6px; background: #fff; color: #494b61; font-size: 10px; }
+.form-grid input::placeholder { color: #b1b2bf; }
+.form-wide { grid-column: 1 / -1; }
+.form-error { margin: 11px 0 0; color: #b34149; font-size: 9px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #eff0f5; }
+.app-footer { margin-bottom: 5px; }
+
+@media (min-width: 1500px) {
+    .main-content { max-width: 1580px; padding-right: 55px; padding-left: 55px; }
+}
+@media (max-width: 1120px) {
+    .sidebar { width: 218px; }
+    .main-content { margin-left: 218px; padding-right: 24px; padding-left: 24px; }
+    .metric-grid { gap: 8px; }
+    .metric-card { padding-right: 10px; padding-left: 10px; }
+    .dashboard-grid { grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr); }
+    .directory-panel table { min-width: 770px; }
+}
+@media (max-width: 820px) {
+    .sidebar { width: 68px; align-items: center; padding: 15px 8px; }
+    .brand { margin: 0 0 27px; }
+    .brand-symbol { width: 36px; height: 36px; }
+    .brand-name, .workspace-switch, .nav-label, .nav-item:not(.active), .nav-item.active { font-size: 0; }
+    .brand-name { display: none; }
+    .workspace-switch, .sidebar-tip, .profile-name, .profile-more, .nav-count { display: none; }
+    .nav-label-bottom { display: none; }
+    .main-nav { width: 100%; }
+    .nav-item { justify-content: center; padding: 0; font-size: 0 !important; }
+    .nav-icon { font-size: 18px; }
+    .profile { width: 100%; justify-content: center; }
+    .main-content { margin-left: 68px; padding-right: 18px; padding-left: 18px; }
+    .dashboard-grid { grid-template-columns: 1fr; }
+    .quick-actions { padding-bottom: 5px; }
+    .report-grid { grid-template-columns: 1fr; }
+    .report-card { min-height: 145px; }
+    .register-panel > .panel-title-row { align-items: flex-start; flex-direction: column; }
+    .register-toolbar { width: 100%; align-items: flex-end; }
+    .register-toolbar .select-label { flex: 1; }
+}
+@media (max-width: 560px) {
+    body { min-width: 320px; }
+    .sidebar { width: 51px; padding: 12px 5px; }
+    .brand-symbol { width: 31px; height: 31px; font-size: 22px; }
+    .nav-item { min-height: 39px; }
+    .main-content { margin-left: 51px; padding-right: 11px; padding-left: 11px; }
+    .topbar { height: 50px; }
+    .breadcrumb { font-size: 8px; }
+    .breadcrumb b { margin: 0 5px; }
+    .secure-pill { display: none; }
+    .top-actions { gap: 8px; }
+    .current-period { font-size: 8px; }
+    .top-avatar { width: 25px; height: 25px; }
+    .logout-button { min-height: 26px; padding: 0 6px; font-size: 8px; }
+    .view { padding-top: 17px; }
+    .welcome-row, .page-heading { align-items: flex-start; }
+    .welcome-row { flex-direction: column; }
+    .page-heading { flex-wrap: wrap; }
+    h1 { font-size: 20px; }
+    .subheading { line-height: 1.5; }
+    .welcome-row > .button { align-self: flex-start; }
+    .company-strip { grid-template-columns: 1fr; gap: 7px; }
+    .metric-grid, .compact-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .metric-card { padding: 10px; }
+    .metric-top { font-size: 6px; }
+    .metric-icon { width: 24px; height: 24px; }
+    .metric-card > strong { font-size: 18px; }
+    .panel { padding: 11px; }
+    .directory-panel, .payroll-panel { padding: 0; }
+    .directory-panel > .panel-title-row, .payroll-panel > .panel-title-row { padding: 12px 11px 0; }
+    .filter-row { flex-wrap: wrap; padding-right: 11px; padding-left: 11px; }
+    .search-box { min-width: 100%; flex-basis: 100%; }
+    .select-label { min-width: 95px; flex: 1; }
+    .select-label select { min-width: 0; }
+    .classification-note { max-width: 55%; line-height: 1.4; }
+    .run-footer { align-items: stretch; flex-direction: column; padding: 11px; }
+    .run-footer .button { width: 100%; }
+    .activity-row { gap: 6px; }
+    .activity-amount { font-size: 8px; }
+    .activity-row .status-tag { padding: 4px 5px; font-size: 7px; }
+    .app-footer { flex-direction: column; gap: 5px; font-size: 6px; }
+    .form-grid { grid-template-columns: 1fr; }
+    .form-wide { grid-column: auto; }
+    .employee-dialog form { padding: 16px; }
+    .employee-detail-fields { grid-template-columns: 1fr; }
+    .protected-field { grid-template-columns: 1fr auto; }
+    .protected-field > span { grid-column: 1 / -1; }
+    .register-toolbar { align-items: stretch; flex-direction: column; }
+    .register-toolbar .select-label { width: 100%; }
+    .register-pagination .button { padding: 0 7px; }
+    .login-card { padding: 24px 19px; }
+    .settings-rules > div { flex-direction: column; gap: 5px; }
+    .settings-rules dd { text-align: left; }
+}
+@media (prefers-reduced-motion: no-preference) {
+    .nav-item, .button, .quick-action { transition: color .15s ease, background-color .15s ease, border-color .15s ease; }
+}
+
+</style>
+</head>
+<body>
+    <section id="login-gate" class="login-gate" hidden aria-labelledby="login-title">
+        <div class="login-card">
+            <a class="brand login-brand" href="#" aria-label="Employees Pay Roll"><span class="brand-symbol">E</span><span class="brand-name">Employees Pay Roll<span>PAYROLL WORKSPACE</span></span></a>
+            <div class="login-shield" aria-hidden="true">✓</div>
+            <p class="eyebrow">SECURE PAYROLL WORKSPACE</p>
+            <h1 id="login-title">Sign in with Google</h1>
+            <p id="login-message" class="login-message">Use the Google account that has access to your payroll spreadsheet. Your account will be checked before employee and payroll data are loaded.</p>
+            <button id="google-login" class="button button-primary login-button" type="button">Continue with Google <span>→</span></button>
+            <p class="login-security"><span>⌑</span> Google verifies your account. This portal never asks for or stores your Google password.</p>
+            <p id="login-error" class="login-error" role="alert" hidden></p>
+        </div>
+        <p class="login-footnote">Authorized Google account and spreadsheet access required.</p>
+    </section>
+    <div id="app-shell" class="app-shell" hidden>
+        <aside class="sidebar">
+            <a class="brand" href="#dashboard" aria-label="Employees Pay Roll home">
+                <span class="brand-symbol">E</span><span class="brand-name">Employees Pay Roll<span>PAYROLL WORKSPACE</span></span>
+            </a>
+            <div class="workspace-switch"><span class="workspace-icon">P</span><span><small>WORKSPACE</small><strong>India Operations</strong></span><span class="chevron">⌄</span></div>
+            <p class="nav-label">WORKSPACE</p>
+            <nav class="main-nav" aria-label="Main navigation">
+                <button class="nav-item active" type="button" data-view="dashboard"><span class="nav-icon">◫</span> Overview</button>
+                <button class="nav-item" type="button" data-view="employees"><span class="nav-icon">♙</span> Employees <span id="employee-nav-count" class="nav-count">0</span></button>
+                <button class="nav-item" type="button" data-view="payroll"><span class="nav-icon">▤</span> Payroll</button>
+                <button class="nav-item" type="button" data-view="attendance"><span class="nav-icon">◷</span> Attendance & leave</button>
+                <button class="nav-item" type="button" data-view="reports"><span class="nav-icon">▥</span> Reports</button>
+                <button class="nav-item" type="button" data-view="registers"><span class="nav-icon">▤</span> Registers & rules</button>
+            </nav>
+            <p class="nav-label nav-label-bottom">ADMINISTRATION</p>
+            <nav class="main-nav">
+                <button class="nav-item" type="button" data-view="settings"><span class="nav-icon">⚙</span> Company settings</button>
+            </nav>
+            <div class="sidebar-tip"><span class="tip-icon">✦</span><strong>Payroll, made clearer.</strong><p>Review your team and prepare a payroll run company by company.</p></div>
+            <div class="profile"><span class="profile-avatar">AD</span><span class="profile-name"><strong>Alexandra Davis</strong><small>Payroll administrator</small></span><button aria-label="Profile options" class="profile-more">···</button></div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div class="breadcrumb"><span>India Operations</span><b>/</b><strong id="breadcrumb-current">Overview</strong></div>
+                <div class="top-actions"><span id="workspace-status" class="secure-pill"><i></i> Google account required</span><span class="top-divider"></span><span class="current-period" id="top-period">—</span><button id="account-button" class="top-avatar" type="button" aria-label="Account">G</button><button id="logout-button" class="button button-light logout-button" type="button" hidden>Sign out</button></div>
+            </header>
+
+            <section class="view active" id="view-dashboard" data-title="Overview">
+                <div class="welcome-row">
+                    <div><p class="eyebrow">PAYROLL OVERVIEW</p><h1>Employees Pay Roll</h1><p class="subheading">Workbook-backed payroll and employee records.</p></div>
+                    <button class="button button-primary" type="button" data-go="payroll"><span>＋</span> Start payroll run</button>
+                </div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Loading authorized payroll data from the connected Google Sheet.</span><button class="notice-close" aria-label="Dismiss notice" type="button">×</button></div>
+                <div class="company-strip" id="dashboard-companies"></div>
+                <div class="metric-grid">
+                    <article class="metric-card"><div class="metric-top"><span>PEOPLE IN YOUR WORKSPACE</span><span class="metric-icon lilac">♙</span></div><strong id="metric-employees">0</strong><small><span id="metric-active">0</span> active <i>·</i> <span id="metric-retainer">0</span> retainers</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>MONTHLY GROSS PAY</span><span class="metric-icon mint">₹</span></div><strong id="metric-pay">₹0</strong><small>From the source Salary Register</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>PAYROLL RUNS</span><span class="metric-icon peach">▤</span></div><strong id="metric-runs">0</strong><small>Archived groups in source history</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>REPORTED WORK DAYS</span><span class="metric-icon blue">◷</span></div><strong id="metric-attendance">0</strong><small>From the current Attendance sheet</small></article>
+                </div>
+                <div class="dashboard-grid">
+                    <article class="panel payroll-overview">
+                        <div class="panel-title-row"><div><h2>Payroll overview</h2><p>Monthly gross salary by company</p></div><span class="chart-caption"><i></i> Gross payroll</span></div>
+                        <div id="payroll-chart" class="chart-area" aria-label="Monthly base salary chart"></div>
+                        <div class="chart-foot"><span>October 2026 <b>·</b> INR</span><button class="inline-link" type="button" data-go="reports">View reports <span>→</span></button></div>
+                    </article>
+                    <article class="panel quick-actions">
+                        <div class="panel-title-row"><div><h2>Quick actions</h2><p>Common payroll tasks</p></div></div>
+                        <button id="quick-add-employee" type="button" data-go="employees" class="quick-action" hidden><span class="quick-icon lavender">＋</span><span><strong>Add an employee</strong><small>Maintain employee data in the source workbook</small></span><b>→</b></button>
+                        <button type="button" data-go="payroll" class="quick-action"><span class="quick-icon green">▤</span><span><strong>Prepare payroll</strong><small>Select who to include this month</small></span><b>→</b></button>
+                        <button type="button" data-go="attendance" class="quick-action"><span class="quick-icon orange">◷</span><span><strong>Review attendance</strong><small>Review inputs from the source workbook</small></span><b>→</b></button>
+                    </article>
+                </div>
+                <article class="panel recent-panel"><div class="panel-title-row"><div><h2>Recent payroll activity</h2><p>Payroll history from the source workbook</p></div><button class="inline-link" type="button" data-go="payroll">All payroll runs <span>→</span></button></div><div id="recent-runs"></div></article>
+            </section>
+
+            <section class="view" id="view-employees" data-title="Employees">
+                <div class="page-heading"><div><p class="eyebrow">PEOPLE DIRECTORY</p><h1>Employees</h1><p class="subheading">Employee records loaded from the authorized Google Sheet.</p></div><button class="button button-primary" id="add-employee-button" type="button" hidden><span>＋</span> Add employee</button></div>
+                <div class="metric-grid compact-metrics">
+                    <article class="metric-card"><div class="metric-top"><span>TOTAL EMPLOYEES</span><span class="metric-icon lilac">♙</span></div><strong id="employee-total">0</strong><small>Across both companies</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>ACTIVE STAFF</span><span class="metric-icon mint">✓</span></div><strong id="employee-active">0</strong><small>Joined before age 58</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>RETAINER STAFF</span><span class="metric-icon peach">◉</span></div><strong id="employee-retainer">0</strong><small>Joined at age 58 or above</small></article>
+                </div>
+                <article class="panel directory-panel">
+                    <div class="panel-title-row"><div><h2>All employees</h2><p>Employee details and monthly base salary</p></div><button id="export-employees" class="button button-light" type="button">↓ <span>Export CSV</span></button></div>
+                    <div class="filter-row">
+                        <label class="search-box"><span>⌕</span><input id="employee-search" type="search" placeholder="Search name, ID or role" aria-label="Search employees"></label>
+                        <label class="select-label"><span>Company</span><select id="employee-company-filter"><option value="all">All companies</option></select></label>
+                        <label class="select-label"><span>Staff type</span><select id="employee-type-filter"><option value="all">All staff types</option><option value="active">Active staff</option><option value="retainer">Retainer staff</option></select></label>
+                        <label class="select-label"><span>Status</span><select id="employee-status-filter"><option value="all">All statuses</option><option value="active">Active</option><option value="on-leave">On leave</option></select></label>
+                    </div>
+                    <div class="table-scroll"><table><thead><tr><th>EMPLOYEE</th><th>COMPANY</th><th>DEPARTMENT</th><th>JOINING AGE</th><th>STAFF TYPE</th><th>STATUS</th><th class="align-right">MONTHLY BASE</th><th></th></tr></thead><tbody id="employee-table"></tbody></table><div id="employee-empty" class="empty-state" hidden>No employees match your search or filters.</div></div>
+                    <div class="table-foot"><span id="employee-result-count">Showing 0 employees</span><span class="classification-note">Retainer classification uses age at joining ≥ 58.</span></div>
+                </article>
+            </section>
+
+            <section class="view" id="view-payroll" data-title="Payroll">
+                <div class="page-heading"><div><p class="eyebrow">MONTHLY PAY CYCLE</p><h1>Payroll</h1><p class="subheading">Select employees manually to preview source-workbook payroll values.</p></div><label class="period-picker"><span>PAY PERIOD</span><input id="pay-period" type="month"></label></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Payroll previews use calculated source-register values for selected employees only. No money is transferred.</span></div>
+                <div class="metric-grid compact-metrics">
+                    <article class="metric-card"><div class="metric-top"><span>ELIGIBLE EMPLOYEES</span><span class="metric-icon lilac">♙</span></div><strong id="payroll-eligible">0</strong><small>Active employee records</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>SELECTED FOR THIS RUN</span><span class="metric-icon mint">✓</span></div><strong id="payroll-selected">0</strong><small>Only checked employees will be included</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>SELECTED BASE PAY</span><span class="metric-icon peach">₹</span></div><strong id="payroll-selected-total">₹0</strong><small>Reference amount in INR</small></article>
+                </div>
+                <article class="panel payroll-panel">
+                    <div class="panel-title-row"><div><h2>Select employees</h2><p>Selections stay with an employee as you change filters, until the page is reloaded.</p></div><span class="section-tag">SELECTED ONLY</span></div>
+                    <div class="filter-row payroll-filters">
+                        <label class="select-label"><span>Company</span><select id="payroll-company-filter"><option value="all">All companies</option></select></label>
+                        <label class="select-label"><span>Staff type</span><select id="payroll-type-filter"><option value="all">All staff types</option><option value="active">Active staff</option><option value="retainer">Retainer staff</option></select></label>
+                        <span id="payroll-visible-count" class="filter-count">Showing 0 employees</span>
+                    </div>
+                    <div class="table-scroll"><table><thead><tr><th class="check-cell"><input id="select-all-visible" type="checkbox" aria-label="Select all visible employees"></th><th>EMPLOYEE</th><th>COMPANY</th><th>AGE AT JOINING</th><th>STAFF TYPE</th><th class="align-right">MONTHLY BASE</th></tr></thead><tbody id="payroll-table"></tbody></table><div id="payroll-empty" class="empty-state" hidden>No employees match these filters.</div></div>
+                    <div class="table-foot"><span id="payroll-selection-caption">0 employees selected</span><button id="select-toggle" type="button" class="inline-link">Select all visible</button></div>
+                    <div id="payroll-result" class="payroll-result" role="status" aria-live="polite" hidden></div>
+                    <div class="run-footer"><span><b>!</b> Preview only; nothing is archived or paid.</span><button id="process-payroll" class="button button-primary" type="button" disabled>Prepare payroll preview <span>→</span></button></div>
+                </article>
+                <article class="panel runs-panel"><div class="panel-title-row"><div><h2>Payroll runs</h2><p>Run history for this browser session</p></div></div><div id="payroll-runs"></div></article>
+            </section>
+
+            <section class="view" id="view-attendance" data-title="Attendance & leave">
+                <div class="page-heading"><div><p class="eyebrow">TEAM TIME & LEAVE</p><h1>Attendance & leave</h1><p class="subheading">Review workbook attendance inputs, leave balances, and calculated deductions.</p></div><span class="section-tag">LIVE SHEET</span></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Attendance and leave values are loaded from the source workbook.</span></div>
+                <div class="metric-grid compact-metrics">
+                    <article class="metric-card"><div class="metric-top"><span>AVERAGE ATTENDANCE</span><span class="metric-icon lilac">◷</span></div><strong id="attendance-average">0%</strong><small>Based on source Attendance inputs</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>LEAVE REQUESTS</span><span class="metric-icon peach">▣</span></div><strong id="leave-pending">0</strong><small>Leave approvals are not connected</small></article>
+                    <article class="metric-card"><div class="metric-top"><span>LEAVE DAYS USED</span><span class="metric-icon mint">✓</span></div><strong id="leave-used">0</strong><small>From source leave balances</small></article>
+                </div>
+                <article class="panel"><div class="panel-title-row"><div><h2>Monthly attendance inputs</h2><p>Update monthly inputs; the Google Sheet calculates LOP, CL/EL usage and deductions.</p></div><label class="select-label"><span>Company</span><select id="attendance-company-filter"><option value="all">All companies</option></select></label></div><div class="table-scroll"><table><thead><tr><th>EMPLOYEE</th><th>COMPANY / GROUP</th><th>WORK DAYS</th><th>LEAVE DAYS</th><th>LONGEST SPELL</th><th>LOP DAYS</th><th>LOP (₹)</th><th>PROCESS ALLOW. (₹)</th><th>PUNCTUAL (₹)</th><th>FULL ATT. (₹)</th><th>LATE DAYS</th><th>LATE DED. (₹)</th><th></th></tr></thead><tbody id="attendance-table"></tbody></table></div></article>
+                <article class="panel leave-panel"><div class="panel-title-row"><div><h2>Leave balances</h2><p>Calendar-year CL/EL entitlements and balances from Leave Master</p></div></div><div id="leave-list"></div></article>
+            </section>
+
+            <section class="view" id="view-registers" data-title="Registers & rules">
+                <div class="page-heading"><div><p class="eyebrow">SOURCE WORKBOOK</p><h1>Registers & payroll rules</h1><p class="subheading">Browse the authorized workbook registers; formula calculations remain in Google Sheets.</p></div><a id="source-workbook-link" class="button button-light" href="#" target="_blank" rel="noopener noreferrer" hidden>Open source workbook ↗</a></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Register values are read-only here. Sensitive columns stay masked; only configured administrators can reveal them in an employee profile. Nothing in this view archives payroll or initiates payments.</span></div>
+                <article class="panel register-panel">
+                    <div class="panel-title-row"><div><h2 id="register-title">Salary Register</h2><p id="register-caption">Workbook-calculated salary and statutory values</p></div><div class="register-toolbar"><label class="select-label"><span>Workbook tab</span><select id="register-select"></select></label><button id="export-register" class="button button-light" type="button" disabled>↓ Export page</button></div></div>
+                    <p id="register-feedback" class="register-feedback" role="status" aria-live="polite"></p>
+                    <div class="table-scroll register-table-scroll"><table><thead id="register-head"></thead><tbody id="register-body"></tbody></table></div>
+                    <div class="table-foot"><span id="register-page-status">Choose a register to load source data.</span><span class="register-pagination"><button id="register-previous" class="button button-light" type="button" disabled>← Previous</button><button id="register-next" class="button button-light" type="button" disabled>Next →</button></span></div>
+                </article>
+                <article class="panel settings-panel">
+                    <div class="panel-title-row"><div><h2>Workbook payroll workflow</h2><p>Review-only guidance based on the source workbook instructions.</p></div></div>
+                    <dl class="settings-rules">
+                        <div><dt>Payroll period</dt><dd>Settings controls the month and calendar-day count used by formulas.</dd></div>
+                        <div><dt>Attendance & loss of pay</dt><dd>Monthly work, leave, continuous-spell, incentive and late inputs feed the workbook's LOP and deduction formulas.</dd></div>
+                        <div><dt>Leave usage</dt><dd>Casual leave is used before earned leave; after three continuous leave days, day four onward uses earned leave.</dd></div>
+                        <div><dt>LOP calculation</dt><dd>Loss-of-pay amount follows the workbook formula: LOP days × Basic ÷ 30.</dd></div>
+                        <div><dt>Statutory review</dt><dd>PF, ESI, bonus, gratuity and TDS are presented from their separate workbook registers; verify applicable law and source formulas.</dd></div>
+                        <div><dt>Payroll payment date</dt><dd>The workbook guidance schedules salary payment for the fifth of the following month. This portal does not initiate payment.</dd></div>
+                        <div><dt>ESI review windows</dt><dd>April–September and October–March.</dd></div>
+                        <div><dt>Month close</dt><dd>Archiving and monthly resets remain manual workbook-owner actions and are not performed by this portal.</dd></div>
+                    </dl>
+                </article>
+            </section>
+
+            <section class="view" id="view-reports" data-title="Reports">
+                <div class="page-heading"><div><p class="eyebrow">PAYROLL INSIGHTS</p><h1>Reports & exports</h1><p class="subheading">Review authorized workbook summaries and export source data as CSV.</p></div><span class="section-tag">AUTHORIZED DATA</span></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Exports contain authorized employee and payroll data. Handle downloaded files as confidential.</span></div>
+                <div class="report-grid">
+                    <article class="panel report-card"><span class="report-icon lilac">₹</span><h2>Monthly salary summary</h2><p>Employee count and payroll values from the workbook report register.</p><button id="export-salary-report" class="button button-light" type="button">↓ Export salary CSV</button></article>
+                    <article class="panel report-card"><span class="report-icon mint">♙</span><h2>Employee directory</h2><p>Company, department, joining age, staff classification, status, and monthly base pay.</p><button id="export-directory-report" class="button button-light" type="button">↓ Export directory CSV</button></article>
+                    <article class="panel report-card"><span class="report-icon peach">▤</span><h2>Payroll run history</h2><p>Archived payroll history from the source workbook.</p><button id="export-runs-report" class="button button-light" type="button">↓ Export runs CSV</button></article>
+                </div>
+                <article class="panel report-breakdown"><div class="panel-title-row"><div><h2>Company salary summary</h2><p>Workbook payroll totals in Indian rupees</p></div></div><div id="company-summary"></div></article>
+            </section>
+
+            <section class="view" id="view-settings" data-title="Company settings">
+                <div class="page-heading"><div><p class="eyebrow">ORGANIZATION PROFILE</p><h1>Company settings</h1><p class="subheading">Workbook-backed company information and payroll guidance.</p></div></div>
+                <div class="notice-bar"><span class="notice-icon">ⓘ</span><span>Payroll policy and calculations remain in the source workbook.</span></div>
+                <article class="panel settings-panel"><div class="panel-title-row"><div><h2>Companies</h2><p>Companies represented in the authorized employee masters</p></div></div><div id="settings-companies" class="settings-company-list"></div></article>
+                <article class="panel settings-panel"><div class="panel-title-row"><div><h2>Payroll source and workflow</h2><p>Workbook calculations remain the source of truth.</p></div></div><dl class="settings-rules"><div><dt>Currency</dt><dd>Indian Rupee (INR, ₹)</dd></div><div><dt>Retainer classification</dt><dd>Age at joining is 58 years or above</dd></div><div><dt>Payroll preview</dt><dd>Selected employees only; source register values</dd></div><div><dt>Tax and statutory deductions</dt><dd>Calculated by workbook formulas</dd></div><div><dt>Persistence</dt><dd>Employee and payroll records stay in the authorized Google Sheet</dd></div><div><dt>Current payroll period</dt><dd id="setting-pay-period">—</dd></div><div><dt>Calendar days in period</dt><dd id="setting-calendar-days">—</dd></div></dl></article>
+            </section>
+
+            <footer class="app-footer"><span>EMPLOYEES PAY ROLL <i>·</i> PEOPLE & PAYROLL</span><span>Google Sheets source · Amounts in INR</span></footer>
+        </main>
+    </div>
+
+    <dialog id="employee-dialog" class="employee-dialog">
+        <form id="employee-form">
+            <div class="dialog-heading"><div><p class="eyebrow">EMPLOYEE DIRECTORY</p><h2 id="dialog-title">Employee details</h2><p>Employee records are maintained in the source workbook.</p></div><button class="dialog-close" type="button" aria-label="Close">×</button></div>
+            <input id="form-original-id" type="hidden">
+            <div class="form-grid">
+                <label>Employee ID<input id="form-id" name="id" required maxlength="20" placeholder="e.g. TF-1005"></label>
+                <label>Full name<input id="form-name" name="name" required maxlength="80" placeholder="Employee name"></label>
+                <label class="form-wide">Company<select id="form-company" name="companyId" required></select></label>
+                <label>Department<input id="form-department" name="department" required maxlength="50" placeholder="e.g. Finance"></label>
+                <label>Job title<input id="form-title" name="title" required maxlength="60" placeholder="e.g. Analyst"></label>
+                <label>Age at joining<input id="form-age" name="ageAtJoining" type="number" min="18" max="100" required></label>
+                <label>Joining date<input id="form-join-date" name="joiningDate" type="date" required></label>
+                <label class="form-wide">Monthly base salary (₹)<input id="form-salary" name="baseSalary" type="number" min="1" step="1" required></label>
+                <label class="form-wide">Employment status<select id="form-status" name="status"><option value="active">Active</option><option value="on-leave">On leave</option></select></label>
+            </div>
+            <p id="form-error" class="form-error" role="alert" hidden></p>
+            <div class="dialog-actions"><button class="button button-light dialog-cancel" type="button">Cancel</button><button class="button button-primary" type="submit">Save employee</button></div>
+        </form>
+    </dialog>
+    <dialog id="employee-detail-dialog" class="employee-dialog detail-dialog">
+        <div class="detail-dialog-content">
+            <div class="dialog-heading"><div><p class="eyebrow">EMPLOYEE RECORD</p><h2 id="employee-detail-title">Employee details</h2><p id="employee-detail-subtitle">Protected workbook information</p></div><button id="employee-detail-close" class="dialog-close" type="button" aria-label="Close">×</button></div>
+            <div id="employee-detail-fields" class="employee-detail-fields"></div>
+            <section class="protected-section"><div><h3>Protected information</h3><p>Masked by default. Full values are returned only after a configured administrator requests them.</p></div><div id="employee-protected-fields" class="protected-fields"></div></section>
+            <p id="employee-detail-feedback" class="form-error" role="alert" hidden></p>
+        </div>
+    </dialog>
+<script>
+(() => {
+    'use strict';
+
+    const appShell = document.getElementById('app-shell');
+    const loginGate = document.getElementById('login-gate');
+    const loginButton = document.getElementById('google-login');
+    const loginMessage = document.getElementById('login-message');
+    const loginError = document.getElementById('login-error');
+    const googleRun = typeof google !== 'undefined' && google.script && google.script.run;
+
+    function showLoginError(error) {
+        appShell.hidden = true;
+        loginGate.hidden = false;
+        loginButton.disabled = false;
+        loginButton.textContent = 'Try Google account access again';
+        loginMessage.textContent = 'Access could not be verified. Sign in with a Google account that has permission to open the payroll spreadsheet, then try again.';
+        loginError.textContent = error?.message || 'The portal could not load authorized payroll data. Ask the spreadsheet owner to check access and setup; no employee data was loaded.';
+        loginError.hidden = false;
+    }
+
+    function initialize(source) {
+        if (!source || source.mode !== 'google-sheets'
+            || !Array.isArray(source.companies) || !Array.isArray(source.employees)) {
+            showLoginError(new Error('The portal did not return verified Google Sheets data. No payroll data was loaded.'));
+            return;
+        }
+        appShell.hidden = false;
+        loginGate.hidden = true;
+
+    const isConnected = true;
+    const companies = source.companies.map((company) => ({ ...company }));
+    let employees = source.employees.map((employee) => ({ ...employee }));
+    let payrollRuns = source.payrollRuns.map((run) => ({ ...run, employeeIds: [...run.employeeIds] }));
+    const leaveRequests = source.leaveRequests.map((request) => ({ ...request }));
+    const selectedIds = new Set();
+    const companyById = new Map(companies.map((company) => [company.id, company]));
+    const colors = ['#eeeafd', '#e4f3ed', '#fff0e2', '#e8effc', '#f9e9ee', '#f0eafa', '#e5f3f4', '#fff2df'];
+    const registerTabs = [
+        'Company Master',
+        'Employee Master - FA',
+        'Employee Master - FR',
+        'Employee Master - SA',
+        'Leave Master',
+        'Attendance',
+        'Advance & Loan',
+        'Flavors India - Active',
+        'Flavors India - Retainers',
+        'Supreme Aromatics - Retainers',
+        'Salary Register',
+        'PF Register - Flavors India',
+        'PF Register - Supreme Aromatics',
+        'ESI Register',
+        'Bonus Register',
+        'Gratuity Register',
+        'TDS Register',
+        'Payslip',
+        'Payroll History',
+        'Reports',
+        'ESI Verification Checklist'
+    ];
+    let currentRegisterPage = null;
+    let currentRegisterStart = 5;
+    let registerLoading = false;
+    let editingId = null;
+    let filteredPayrollEmployees = [];
+    let filteredDirectoryEmployees = [];
+
+    const byId = (id) => document.getElementById(id);
+    const money = (amount) => new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0
+    }).format(amount);
+    const staffType = (employee) => employee.staffType || (employee.ageAtJoining >= 58 ? 'retainer' : 'active');
+    const staffLabel = (employee) => staffType(employee) === 'retainer' ? 'Retainer' : 'Active';
+    const companyName = (id) => companyById.get(id)?.name ?? 'Unassigned company';
+    const employeeFor = (id) => employees.find((employee) => employee.id === id);
+    const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map((part) => part[0].toUpperCase()).join('');
+
+    function node(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+    }
+
+    function cell(row, text, className) {
+        const element = node('td', className, text);
+        row.append(element);
+        return element;
+    }
+
+    function avatar(employee, className = 'person-avatar') {
+        const element = node('span', className, employee.initials || initials(employee.name));
+        element.style.backgroundColor = employee.color || colors[employees.indexOf(employee) % colors.length];
+        return element;
+    }
+
+    function personCell(employee) {
+        const wrapper = node('div', 'person-cell');
+        const identity = node('span', 'person-identity');
+        identity.append(node('strong', '', employee.name), node('small', '', employee.id));
+        wrapper.append(avatar(employee), identity);
+        return wrapper;
+    }
+
+    function tag(label, style) {
+        return node('span', `status-tag ${style}`, label);
+    }
+
+    function fillCompanyOptions(select, includeAll = true) {
+        const firstOption = includeAll ? select.querySelector('option') : null;
+        select.replaceChildren();
+        if (includeAll) {
+            select.append(new Option(firstOption?.textContent || 'All companies', 'all'));
+        }
+        companies.forEach((company) => select.append(new Option(company.name, company.id)));
+    }
+
+    function updateCompanyFilters() {
+        ['employee-company-filter', 'payroll-company-filter', 'attendance-company-filter'].forEach((id) => {
+            const select = byId(id);
+            const value = select.value;
+            fillCompanyOptions(select);
+            if ([...select.options].some((option) => option.value === value)) select.value = value;
+        });
+        const formSelect = byId('form-company');
+        const selected = formSelect.value;
+        fillCompanyOptions(formSelect, false);
+        if ([...formSelect.options].some((option) => option.value === selected)) formSelect.value = selected;
+    }
+
+    function renderCompanyCards() {
+        const container = byId('dashboard-companies');
+        container.replaceChildren();
+        companies.forEach((company, index) => {
+            const staff = employees.filter((employee) => employee.companyId === company.id);
+            const summary = source.companyTotals?.find((item) => item.companyId === company.id);
+            const pay = summary ? summary.grossSalary : staff.reduce((sum, employee) => sum + employee.baseSalary, 0);
+            const card = node('article', `company-card company-color-${index % 2}`);
+            const marker = node('span', 'company-marker', company.shortName.slice(0, 1));
+            const details = node('span', 'company-card-details');
+            details.append(node('strong', '', company.name), node('small', '', `${staff.length} employees · ${pay == null ? 'Review source formulas' : money(pay)} gross payroll`));
+            card.append(marker, details, node('span', 'company-card-arrow', '↗'));
+            container.append(card);
+        });
+    }
+
+    function renderDashboard() {
+        const totalPay = source.companyTotals
+            ? source.companyTotals.reduce((sum, company) => sum + (company.grossSalary || 0), 0)
+            : employees.reduce((sum, employee) => sum + employee.baseSalary, 0);
+        const totalsNeedReview = source.companyTotals?.some((company) => company.grossSalary == null);
+        const activeCount = employees.filter((employee) => staffType(employee) === 'active').length;
+        const retainerCount = employees.length - activeCount;
+        const workDays = employees.reduce((sum, employee) => sum + (employee.attendance?.workDays ?? employee.presentDays ?? 0), 0);
+        const monthInput = source.payrollPeriod || '2026-10';
+        const [year, month] = monthInput.split('-').map(Number);
+        const period = year && month
+            ? new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, 1)))
+            : source.periodLabel || 'Current period';
+        byId('metric-employees').textContent = employees.length;
+        byId('metric-active').textContent = activeCount;
+        byId('metric-retainer').textContent = retainerCount;
+        byId('metric-pay').textContent = totalsNeedReview
+            ? 'Review source'
+            : money(totalPay);
+        byId('metric-runs').textContent = payrollRuns.length;
+        byId('metric-attendance').textContent = String(workDays);
+        byId('top-period').textContent = period;
+        byId('pay-period').value = monthInput;
+        document.querySelector('.chart-foot > span').textContent = `${period} · INR`;
+        document.querySelector('.metric-card:nth-child(2) .metric-top > span').textContent = 'MONTHLY GROSS PAY';
+        document.querySelector('.metric-card:nth-child(2) small').textContent = 'From the source Salary Register';
+        document.querySelector('.metric-card:nth-child(4) .metric-top > span').textContent = 'REPORTED WORK DAYS';
+        document.querySelector('.metric-card:nth-child(4) small').textContent = 'Reported in the current Attendance sheet';
+        byId('employee-nav-count').textContent = employees.length;
+        if (isConnected) {
+            document.querySelector('#view-employees thead th:nth-child(4)').textContent = 'AGE AT JOINING';
+            document.querySelector('#view-payroll thead th:nth-child(4)').textContent = 'AGE AT JOINING';
+            byId('workspace-status').textContent = 'Google account verified';
+            byId('logout-button').hidden = false;
+            byId('account-button').textContent = initials(source.userEmail || 'Google');
+            byId('account-button').title = 'Sign out of the portal; your Google account remains signed in';
+            byId('account-button').setAttribute('aria-label', 'Sign out of Employees Pay Roll');
+            byId('logout-button').title = 'Signs out of this portal only, not your Google account';
+            document.querySelector('.profile-name strong').textContent = source.userEmail || 'Google account';
+            document.querySelector('.profile-name small').textContent =
+                source.canRevealSensitive ? 'Portal administrator' : 'Authorized account';
+            document.querySelector('.profile-avatar').textContent = initials(source.userEmail || 'Google');
+            document.querySelector('.profile-more').hidden = true;
+            document.querySelector('#view-dashboard .welcome-row h1').textContent = 'Payroll overview';
+            document.querySelector('#view-dashboard .welcome-row .eyebrow').textContent = 'CURRENT PAYROLL PERIOD · WORKSPACE OVERVIEW';
+            document.querySelector('.quick-actions #quick-add-employee').hidden = true;
+            document.querySelector('.quick-actions [data-go="attendance"] small').textContent = 'Review current workbook attendance inputs';
+            document.querySelector('#view-dashboard .metric-card:nth-child(3) small').textContent = 'Archived payroll groups from workbook history';
+            document.querySelector('#view-dashboard .payroll-overview .panel-title-row p').textContent = 'Current gross salary by company';
+            document.querySelector('#view-dashboard .chart-caption').lastChild.textContent = ' Gross salary';
+            document.querySelector('#view-dashboard .recent-panel .panel-title-row p').textContent =
+                'Archived payroll history from the source workbook';
+            document.querySelector('#view-dashboard .notice-bar span:nth-child(2)').textContent =
+                'Connected to your authorized Google Sheet. Payroll previews use its calculated Salary Register; no bank payments are initiated.';
+            document.querySelector('#view-employees .subheading').textContent =
+                'Employee records loaded from the protected Google Sheet. Sensitive identifiers and bank/contact fields are masked; full values require configured administrator access.';
+            document.querySelector('#view-payroll .subheading').textContent = 'Select employees manually; the portal previews only their calculated source register values.';
+            document.querySelector('#view-payroll .notice-bar span:nth-child(2)').textContent =
+                'Source-sheet preview. Gross, deductions and net use the spreadsheet formulas for selected employees only. No payment is made.';
+            document.querySelector('#view-payroll .panel-title-row .section-tag').textContent = 'SELECTED ONLY';
+            document.querySelector('#view-payroll .metric-card:nth-child(3) .metric-top > span').textContent = 'SELECTED BASE PAY';
+            document.querySelector('#view-payroll .metric-card:nth-child(3) small').textContent =
+                'Reference only; preview uses calculated register values';
+            document.querySelector('#view-payroll .runs-panel .panel-title-row p').textContent =
+                'Archived payroll groups read from Payroll History';
+            document.querySelector('#view-payroll .run-footer > span').textContent =
+                'This prepares a selected-employee preview only. Nothing is archived or paid.';
+            byId('pay-period').disabled = true;
+            document.querySelector('#view-attendance .subheading').textContent = 'Monthly attendance inputs, leave balances, LOP and late-deduction calculations from the source sheet.';
+            document.querySelector('#view-attendance .page-heading .section-tag').textContent = 'LIVE SHEET';
+            document.querySelector('#view-attendance .notice-bar span:nth-child(2)').textContent =
+                'Attendance input edits are restricted to workbook input columns; formula-driven LOP and leave calculations remain in Google Sheets.';
+            document.querySelector('#view-attendance .metric-card:first-child .metric-top > span').textContent = 'REPORTED WORK DAYS';
+            document.querySelector('#view-attendance .metric-card:first-child small').textContent = 'Sum of work days currently listed in the Attendance tab';
+            document.querySelector('#view-attendance .metric-card:nth-child(2) .metric-top > span').textContent = 'LEAVE REQUEST INBOX';
+            document.querySelector('#view-attendance .metric-card:nth-child(2) small').textContent = 'Leave approval workflow is not connected';
+            document.querySelector('#view-reports .subheading').textContent = 'Review company payroll, compliance registers, and safely export the authorized records you can access.';
+            document.querySelector('#view-reports .page-heading .section-tag').textContent = 'AUTHORIZED DATA';
+            document.querySelector('#view-reports .notice-bar span:nth-child(2)').textContent =
+                'Exports contain authorized employee and payroll data. Handle downloaded files as confidential and store them securely.';
+            document.querySelector('#view-reports .report-card:first-child p').textContent =
+                'Payroll summaries from the workbook’s current report registers.';
+            document.querySelector('#view-reports .report-card:nth-child(2) p').textContent =
+                'Authorized employee directory details and salary fields.';
+            document.querySelector('#view-reports .report-card:nth-child(3) p').textContent =
+                'Archived payroll history read from the source workbook.';
+            document.querySelector('#view-reports .report-breakdown .panel-title-row p').textContent =
+                'Payroll register totals in Indian rupees; review flagged formula errors in the source workbook.';
+            document.querySelector('#view-settings .subheading').textContent = `Authenticated Google account: ${source.userEmail || 'verified'} · Source of truth: protected Google Sheet.`;
+            const sourceLink = byId('source-workbook-link');
+            sourceLink.href = source.sourceSpreadsheetUrl || '#';
+            sourceLink.hidden = !source.sourceSpreadsheetUrl;
+            const settingsPanels = document.querySelectorAll('#view-settings .settings-panel');
+            settingsPanels[0].querySelector('.panel-title-row p').textContent = 'Companies represented in the authorized employee masters';
+            settingsPanels[1].querySelector('.panel-title-row h2').textContent = 'Payroll source and workflow';
+            settingsPanels[1].querySelector('.panel-title-row p').textContent = 'Workbook calculations remain the source of truth.';
+            const ruleDescriptions = settingsPanels[1].querySelectorAll('.settings-rules dd');
+            const hasJoiningAge = employees.some((employee) => Number.isInteger(employee.ageAtJoining));
+            ruleDescriptions[1].textContent = hasJoiningAge
+                ? 'Calculated server-side from date of birth when present; otherwise uses the employee master group'
+                : 'Staff type follows the employee master; age at joining is not stored';
+            ruleDescriptions[2].textContent = 'Selected employees only; gross, deductions and net use the source register';
+            ruleDescriptions[3].textContent = 'Calculated by workbook formulas; verify the source sheet';
+            ruleDescriptions[4].textContent = 'Employee and payroll records stay in the authorized Google Sheet; portal previews are not archived';
+            ruleDescriptions[5].textContent = source.periodLabel || source.payrollPeriod || 'Not set';
+            ruleDescriptions[6].textContent = String(source.calendarDays || 'Not set');
+            byId('add-employee-button').hidden = true;
+            document.querySelector('#view-employees .classification-note').textContent =
+                hasJoiningAge
+                    ? 'Age at joining is calculated server-side where date of birth is present; otherwise staff type follows the employee master group.'
+                    : 'Staff type follows the employee master group; age at joining is not stored in this workbook.';
+            document.querySelector('#view-employees .metric-card:nth-child(2) small').textContent = 'Classification from the employee master';
+            document.querySelector('#view-employees .metric-card:nth-child(3) small').textContent = 'Classification from the employee master';
+            document.querySelector('.app-footer > span:last-child').textContent = 'Google Sheets source · Amounts in INR';
+            const warningBar = document.querySelector('#view-dashboard .notice-bar');
+            if (source.warnings?.length) {
+                const details = source.warnings.slice(0, 3).join(' ');
+                const remaining = source.warnings.length > 3 ? ` ${source.warnings.length - 3} more item(s) need review.` : '';
+                const warning = node('span', 'server-warning', `${source.warnings.length} source-sheet item(s) need review. ${details}${remaining}`);
+                warningBar.append(warning);
+            }
+        }
+        updateRegisterOptions();
+        renderCompanyCards();
+        renderChart();
+        renderRecentRuns(byId('recent-runs'), 3);
+        if (isConnected) loadRegisterPage('Salary Register', 5);
+    }
+
+    function renderChart() {
+        const chart = byId('payroll-chart');
+        chart.replaceChildren();
+        const values = companies.map((company) => {
+            const summary = source.companyTotals?.find((item) => item.companyId === company.id);
+            return summary ? summary.grossSalary : employees.filter((employee) => employee.companyId === company.id)
+                .reduce((sum, employee) => sum + employee.baseSalary, 0);
+        }).filter((value) => value != null);
+        const maxPay = Math.max(...values, 1);
+        companies.forEach((company) => {
+            const companyEmployees = employees.filter((employee) => employee.companyId === company.id);
+            const summary = source.companyTotals?.find((item) => item.companyId === company.id);
+            const total = summary ? summary.grossSalary : companyEmployees.reduce((sum, employee) => sum + employee.baseSalary, 0);
+            const group = node('div', 'chart-group');
+            const amount = node('strong', 'chart-amount', total == null ? 'Review source' : money(total));
+            const bar = node('div', 'chart-bar-track');
+            const fill = node('span', 'chart-bar-fill');
+            fill.style.height = `${total == null ? 0 : Math.max(7, (total / maxPay) * 100)}%`;
+            bar.append(fill);
+            group.append(amount, bar, node('span', 'chart-company', company.shortName));
+            chart.append(group);
+        });
+    }
+
+    function renderRecentRuns(container, limit = Infinity) {
+        container.replaceChildren();
+        const rows = [...payrollRuns].slice(0, limit);
+        if (!rows.length) {
+            container.append(node('p', 'empty-state', isConnected
+                ? 'No archived payroll history was found in the source workbook.'
+                : 'No payroll previews have been prepared in this session.'));
+            return;
+        }
+        rows.forEach((run) => {
+            const line = node('div', 'activity-row');
+            const icon = node('span', 'activity-icon', '₹');
+            const info = node('span', 'activity-info');
+            info.append(
+                node('strong', '', run.id),
+                node('small', '', `${run.period} · ${run.companyLabel || companyName(run.companyId)} · ${run.employeeIds.length} employees`)
+            );
+            line.append(icon, info, node('strong', 'activity-amount', money(run.total)), tag(run.status, 'prepared'));
+            container.append(line);
+        });
+    }
+
+    function renderEmployees() {
+        const search = byId('employee-search').value.trim().toLowerCase();
+        const company = byId('employee-company-filter').value;
+        const type = byId('employee-type-filter').value;
+        const status = byId('employee-status-filter').value;
+        filteredDirectoryEmployees = employees.filter((employee) => {
+            const searchable = `${employee.name} ${employee.id} ${employee.title} ${employee.department}`.toLowerCase();
+            return (company === 'all' || employee.companyId === company)
+                && (type === 'all' || staffType(employee) === type)
+                && (status === 'all' || employee.status === status)
+                && searchable.includes(search);
+        });
+        const body = byId('employee-table');
+        body.replaceChildren();
+        filteredDirectoryEmployees.forEach((employee) => {
+            const row = node('tr');
+            cell(row, '').append(personCell(employee));
+            cell(row, companyName(employee.companyId), 'company-cell');
+            cell(row, employee.department || staffLabel(employee));
+            cell(row, Number.isInteger(employee.ageAtJoining) ? `${employee.ageAtJoining} years` : 'Not in source');
+            const typeCell = cell(row, '');
+            typeCell.append(tag(staffLabel(employee), staffType(employee)));
+            const statusCell = cell(row, '');
+            statusCell.append(tag(employee.status === 'on-leave' ? 'On leave' : 'Active', employee.status === 'on-leave' ? 'on-leave' : 'active'));
+            cell(row, employee.baseSalary == null ? 'Review source' : money(employee.baseSalary), 'align-right amount-cell');
+            const action = cell(row, '');
+            if (isConnected) {
+                const view = node('button', 'row-action', 'View');
+                view.type = 'button';
+                view.setAttribute('aria-label', `View ${employee.name}`);
+                view.addEventListener('click', () => openEmployeeDetails(employee));
+                action.append(view);
+            } else {
+                const edit = node('button', 'row-action', 'Edit');
+                edit.type = 'button';
+                edit.setAttribute('aria-label', `Edit ${employee.name}`);
+                edit.addEventListener('click', () => openEmployeeDialog(employee));
+                action.append(edit);
+            }
+            body.append(row);
+        });
+        byId('employee-empty').hidden = filteredDirectoryEmployees.length !== 0;
+        byId('employee-result-count').textContent = `Showing ${filteredDirectoryEmployees.length} of ${employees.length} employees`;
+        const activeCount = employees.filter((employee) => staffType(employee) === 'active').length;
+        byId('employee-total').textContent = employees.length;
+        byId('employee-active').textContent = activeCount;
+        byId('employee-retainer').textContent = employees.length - activeCount;
+    }
+
+    function openEmployeeDetails(employee) {
+        byId('employee-detail-title').textContent = employee.name;
+        byId('employee-detail-subtitle').textContent = `${employee.id} · ${companyName(employee.companyId)}`;
+        byId('employee-detail-feedback').hidden = true;
+        const fields = byId('employee-detail-fields');
+        fields.replaceChildren();
+        const details = [
+            ['Job title', employee.title || 'Not recorded'],
+            ['Staff type', staffLabel(employee)],
+            ['Employment status', employee.status === 'on-leave' ? 'On leave' : (employee.status === 'inactive' ? 'Inactive' : 'Active')],
+            ['Joining date', employee.joiningDate || 'Not recorded'],
+            ['Age at joining', Number.isInteger(employee.ageAtJoining) ? `${employee.ageAtJoining} years` : 'Not recorded in the source'],
+            ['Base salary', employee.baseSalary == null ? 'Review source' : money(employee.baseSalary)],
+            ['Fixed allowance', employee.fixedAllowance == null ? 'Review source' : money(employee.fixedAllowance)],
+            ['Per-day rate', employee.perDayRate == null ? 'Review source' : money(employee.perDayRate)],
+            ['PF applicable', employee.pfApplicable ? 'Yes' : 'No'],
+            ['ESI exempt', employee.esiExempt ? 'Yes' : 'No'],
+            ['Health insurance', employee.healthInsurance == null ? 'Review source' : money(employee.healthInsurance)],
+            ['LIC deduction', employee.licDeduction == null ? 'Review source' : money(employee.licDeduction)],
+            ['CL balance', employee.leaveBalance?.clBalance ?? 'Not recorded'],
+            ['EL balance', employee.leaveBalance?.elBalance ?? 'Not recorded']
+        ];
+        details.forEach(([label, value]) => {
+            const item = node('div', 'employee-detail-item');
+            item.append(node('span', '', label), node('strong', '', value));
+            fields.append(item);
+        });
+
+        const protectedFields = byId('employee-protected-fields');
+        protectedFields.replaceChildren();
+        const secrets = Array.isArray(employee.protectedFields) ? employee.protectedFields : [];
+        if (!secrets.length) {
+            protectedFields.append(node('p', 'empty-state', 'No sensitive fields were found in this employee master.'));
+        }
+        secrets.forEach((field) => {
+            const item = node('div', 'protected-field');
+            const value = node('strong', 'protected-value', field.maskedValue);
+            const reveal = node('button', 'button button-light protected-reveal', source.canRevealSensitive ? 'Show value' : 'Admin access required');
+            reveal.type = 'button';
+            reveal.disabled = !source.canRevealSensitive;
+            reveal.setAttribute('aria-label', `${source.canRevealSensitive ? 'Show' : 'Admin access required for'} ${field.label}`);
+            reveal.addEventListener('click', () => {
+                if (reveal.dataset.revealed === 'true') {
+                    value.textContent = field.maskedValue;
+                    reveal.textContent = 'Show value';
+                    reveal.dataset.revealed = 'false';
+                    return;
+                }
+                reveal.disabled = true;
+                reveal.textContent = 'Checking access…';
+                google.script.run
+                    .withSuccessHandler((fullValue) => {
+                        value.textContent = fullValue;
+                        reveal.textContent = 'Hide value';
+                        reveal.dataset.revealed = 'true';
+                        reveal.disabled = false;
+                    })
+                    .withFailureHandler((error) => {
+                        reveal.textContent = 'Show value';
+                        reveal.disabled = false;
+                        byId('employee-detail-feedback').textContent =
+                            error.message || 'The protected value could not be revealed.';
+                        byId('employee-detail-feedback').hidden = false;
+                    })
+                    .revealEmployeeSensitiveField(employee.id, field.columnNumber);
+            });
+            item.append(node('span', '', field.label), value, reveal);
+            protectedFields.append(item);
+        });
+        byId('employee-detail-dialog').showModal();
+    }
+
+    function updateRegisterOptions() {
+        const select = byId('register-select');
+        select.replaceChildren();
+        registerTabs.forEach((sheetName) => select.append(new Option(sheetName, sheetName)));
+        select.value = 'Salary Register';
+    }
+
+    function loadRegisterPage(sheetName, startRow) {
+        if (registerLoading) return;
+        registerLoading = true;
+        byId('register-title').textContent = sheetName;
+        byId('register-caption').textContent = 'Loading authorized workbook data…';
+        byId('register-feedback').textContent = '';
+        byId('register-body').replaceChildren();
+        byId('register-head').replaceChildren();
+        byId('register-page-status').textContent = 'Loading register rows…';
+        byId('register-previous').disabled = true;
+        byId('register-next').disabled = true;
+        byId('export-register').disabled = true;
+        google.script.run
+            .withSuccessHandler((page) => {
+                currentRegisterPage = page;
+                currentRegisterStart = startRow;
+                renderRegisterPage(page);
+                registerLoading = false;
+            })
+            .withFailureHandler((error) => {
+                registerLoading = false;
+                byId('register-caption').textContent = 'Register could not be loaded.';
+                byId('register-feedback').textContent =
+                    error.message || `Unable to load the ${sheetName} tab.`;
+                byId('register-page-status').textContent = '';
+            })
+            .getPayrollRegisterPage(sheetName, startRow);
+    }
+
+    function renderRegisterPage(page) {
+        const header = node('tr');
+        header.append(node('th', '', 'ROW'));
+        page.columns.forEach((column) => header.append(node('th', '', column || '—')));
+        byId('register-head').replaceChildren(header);
+        const body = byId('register-body');
+        body.replaceChildren();
+        page.rows.forEach((record) => {
+            const row = node('tr');
+            cell(row, record.rowNumber, 'register-row-number');
+            record.values.forEach((value) => cell(row, value));
+            body.append(row);
+        });
+        const firstShown = page.rows.length ? page.rows[0].rowNumber : page.startRow;
+        const lastShown = page.rows.length ? page.rows[page.rows.length - 1].rowNumber : firstShown;
+        byId('register-title').textContent = page.sheetName;
+        byId('register-caption').textContent =
+            'Source workbook values. Read-only view; sensitive columns are masked.';
+        byId('register-page-status').textContent =
+            `${page.rows.length ? `Rows ${firstShown}–${lastShown}` : 'No rows on this page'} · ${page.totalRows} source rows`;
+        byId('register-previous').disabled = currentRegisterStart <= 5 || registerLoading;
+        byId('register-next').disabled = !page.hasMore || registerLoading;
+        byId('export-register').disabled = !page.rows.length;
+    }
+
+    function filteredForPayroll() {
+        const company = byId('payroll-company-filter').value;
+        const type = byId('payroll-type-filter').value;
+        return employees.filter((employee) => employee.status !== 'inactive'
+            && (company === 'all' || employee.companyId === company)
+            && (type === 'all' || staffType(employee) === type));
+    }
+
+    function updatePayrollSummary() {
+        const selected = employees.filter((employee) => selectedIds.has(employee.id));
+        const total = selected.reduce((sum, employee) => sum + (employee.baseSalary || 0), 0);
+        byId('payroll-eligible').textContent = employees.filter((employee) => employee.status === 'active').length;
+        byId('payroll-selected').textContent = selected.length;
+        byId('payroll-selected-total').textContent = selected.some((employee) => employee.baseSalary == null)
+            ? 'Review source'
+            : money(total);
+        byId('payroll-selection-caption').textContent = `${selected.length} ${selected.length === 1 ? 'employee' : 'employees'} selected`;
+        byId('process-payroll').disabled = selected.length === 0;
+    }
+
+    function renderPayrollSelection() {
+        filteredPayrollEmployees = filteredForPayroll();
+        const body = byId('payroll-table');
+        body.replaceChildren();
+        filteredPayrollEmployees.forEach((employee) => {
+            const row = node('tr');
+            const checkboxCell = cell(row, '', 'check-cell');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'payroll-checkbox';
+            checkbox.checked = selectedIds.has(employee.id);
+            checkbox.dataset.employeeId = employee.id;
+            checkbox.setAttribute('aria-label', `Select ${employee.name} for payroll`);
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) selectedIds.add(employee.id);
+                else selectedIds.delete(employee.id);
+                byId('payroll-result').hidden = true;
+                updatePayrollSummary();
+                updateSelectAllState();
+            });
+            checkboxCell.append(checkbox);
+            cell(row, '').append(personCell(employee));
+            cell(row, companyName(employee.companyId), 'company-cell');
+            cell(row, Number.isInteger(employee.ageAtJoining) ? `${employee.ageAtJoining} years` : 'Not in source');
+            const staffCell = cell(row, '');
+            staffCell.append(tag(staffLabel(employee), staffType(employee)));
+            cell(row, employee.baseSalary == null ? 'Review source' : money(employee.baseSalary), 'align-right amount-cell');
+            body.append(row);
+        });
+        byId('payroll-visible-count').textContent = `Showing ${filteredPayrollEmployees.length} employees`;
+        byId('payroll-empty').hidden = filteredPayrollEmployees.length !== 0;
+        updatePayrollSummary();
+        updateSelectAllState();
+    }
+
+    function updateSelectAllState() {
+        const selectedVisible = filteredPayrollEmployees.filter((employee) => selectedIds.has(employee.id)).length;
+        const allSelected = filteredPayrollEmployees.length > 0 && selectedVisible === filteredPayrollEmployees.length;
+        const checkbox = byId('select-all-visible');
+        checkbox.checked = allSelected;
+        checkbox.indeterminate = selectedVisible > 0 && !allSelected;
+        byId('select-toggle').textContent = allSelected ? 'Deselect all visible' : 'Select all visible';
+    }
+
+    function renderRuns() {
+        renderRecentRuns(byId('payroll-runs'));
+    }
+
+    function processPayroll() {
+        const selected = employees.filter((employee) => selectedIds.has(employee.id) && employee.status !== 'inactive');
+        if (!selected.length) return;
+        const period = byId('pay-period').value;
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+            const result = byId('payroll-result');
+            result.textContent = 'Choose a valid payroll period before preparing a preview.';
+            result.hidden = false;
+            return;
+        }
+        const button = byId('process-payroll');
+        button.disabled = true;
+        button.textContent = 'Checking selected employees…';
+        google.script.run
+            .withSuccessHandler(showConnectedPreview)
+            .withFailureHandler((error) => {
+                button.textContent = 'Prepare payroll preview →';
+                button.disabled = selectedIds.size === 0;
+                const result = byId('payroll-result');
+                result.textContent = error.message || 'The source payroll preview failed. Check the Google Sheet and try again.';
+                result.hidden = false;
+            })
+            .getSelectedPayrollPreview(selected.map((employee) => employee.id), period);
+        return;
+    }
+
+    function showConnectedPreview(rows) {
+        const result = byId('payroll-result');
+        const gross = rows.reduce((sum, employee) => sum + employee.grossSalary, 0);
+        const deductions = rows.reduce((sum, employee) => sum + employee.totalDeductions, 0);
+        const net = rows.reduce((sum, employee) => sum + employee.netPayable, 0);
+        const heading = node('strong', '', `${rows.length} selected ${rows.length === 1 ? 'employee' : 'employees'} · source-sheet preview`);
+        result.replaceChildren(
+            heading,
+            document.createTextNode(` · Gross ${money(gross)} · Deductions ${money(deductions)} · Net payable ${money(net)}. Preview only; nothing has been archived or paid.`)
+        );
+        rows.forEach((employee) => {
+            const detail = node('span', 'preview-detail',
+                `${employee.employeeId} · ${employee.name} · Gross ${money(employee.grossSalary)} · Deductions ${money(employee.totalDeductions)} · Net ${money(employee.netPayable)}`);
+            result.append(detail);
+        });
+        result.hidden = false;
+        selectedIds.clear();
+        byId('process-payroll').textContent = 'Prepare payroll preview →';
+        renderPayrollSelection();
+    }
+
+    function renderAttendance() {
+        const company = byId('attendance-company-filter').value;
+        const subset = employees.filter((employee) => company === 'all' || employee.companyId === company);
+        const body = byId('attendance-table');
+        body.replaceChildren();
+        subset.forEach((employee) => {
+            const row = node('tr');
+            cell(row, '').append(personCell(employee));
+            cell(row, companyName(employee.companyId), 'company-cell');
+            const attendance = employee.attendance || {
+                workDays: employee.presentDays ?? 0,
+                leaveDays: employee.workingDays ? Math.max(0, employee.workingDays - employee.presentDays) : 0,
+                longestContinuousSpell: 0,
+                lopDays: 0,
+                lopAmount: 0,
+                processAllowance: 0,
+                punctualIncentive: 0,
+                fullAttendanceBonus: 0,
+                totalLateDays: 0,
+                lateAttendanceDeduction: 0
+            };
+            const inputFields = [
+                ['workDays', attendance.workDays, false],
+                ['leaveDays', attendance.leaveDays, false],
+                ['longestContinuousSpell', attendance.longestContinuousSpell, false]
+            ];
+            inputFields.forEach(([field, value]) => appendAttendanceInput(row, employee, field, value, false));
+            cell(row, attendance.lopDays ?? 0, 'align-right');
+            cell(row, attendance.lopAmount == null ? 'Check sheet' : money(attendance.lopAmount), 'align-right amount-cell');
+            [
+                ['processAllowance', attendance.processAllowance, true],
+                ['punctualIncentive', attendance.punctualIncentive, true],
+                ['fullAttendanceBonus', attendance.fullAttendanceBonus, true],
+                ['totalLateDays', attendance.totalLateDays, false]
+            ].forEach(([field, value, isMoney]) => appendAttendanceInput(row, employee, field, value, isMoney));
+            cell(row, attendance.lateAttendanceDeduction == null ? 'Check sheet' : money(attendance.lateAttendanceDeduction), 'align-right amount-cell');
+            const actionCell = cell(row, '');
+            const action = node('div', 'attendance-action');
+            const save = node('button', 'attendance-save', 'Save');
+            save.type = 'button';
+            save.addEventListener('click', () => saveAttendance(employee, row, save));
+            action.append(save);
+            actionCell.append(action);
+            body.append(row);
+        });
+        const reportedWorkDays = employees.reduce((sum, employee) =>
+            sum + (employee.attendance?.workDays ?? employee.presentDays ?? 0), 0);
+        byId('attendance-average').textContent = String(reportedWorkDays);
+        byId('leave-pending').textContent = leaveRequests.filter((request) => request.status === 'Pending').length;
+        byId('leave-used').textContent = isConnected
+            ? employees.reduce((sum, employee) => sum + (employee.leaveBalance?.clTaken || 0) + (employee.leaveBalance?.elTaken || 0), 0)
+            : employees.reduce((sum, employee) => sum + employee.leaveUsed, 0);
+        renderLeaveRequests();
+    }
+
+    function appendAttendanceInput(row, employee, field, value, isMoney) {
+        const input = document.createElement('input');
+        input.className = `attendance-input${isMoney ? ' money-input' : ''}`;
+        input.type = 'number';
+        input.min = '0';
+        input.max = isMoney ? '10000000' : String(source.calendarDays || 31);
+        input.step = '1';
+        input.value = value == null ? '' : String(value);
+        input.dataset.field = field;
+        input.setAttribute('aria-label', `${field} for ${employee.name}`);
+        cell(row, '').append(input);
+    }
+
+    function saveAttendance(employee, row, button) {
+        const fields = {};
+        row.querySelectorAll('.attendance-input').forEach((input) => {
+            fields[input.dataset.field] = input.value;
+        });
+        button.disabled = true;
+        button.textContent = 'Saving';
+        if (isConnected) {
+            google.script.run
+                .withSuccessHandler(() => {
+                    button.textContent = 'Saved';
+                    button.classList.add('saved');
+                    window.setTimeout(() => window.location.reload(), 500);
+                })
+                .withFailureHandler((error) => {
+                    button.disabled = false;
+                    button.textContent = 'Save';
+                    const feedback = node('span', 'attendance-feedback', error.message || 'Attendance update failed. Check sheet access and try again.');
+                    row.querySelector('.attendance-action').append(feedback);
+                })
+                .updateAttendance(employee.id, fields);
+            return;
+        }
+        employee.attendance = { ...(employee.attendance || {}), ...Object.fromEntries(
+            Object.entries(fields).map(([key, value]) => [key, Number(value)])
+        ) };
+        button.disabled = false;
+        button.textContent = 'Saved';
+        window.setTimeout(() => {
+            button.textContent = 'Save';
+            button.classList.remove('saved');
+        }, 1200);
+        renderDashboard();
+    }
+
+    function renderLeaveRequests() {
+        const list = byId('leave-list');
+        list.replaceChildren();
+        if (isConnected) {
+            employees.forEach((employee) => {
+                const balance = employee.leaveBalance;
+                if (!balance) return;
+                const row = node('div', 'leave-row');
+                const info = node('div', 'leave-info');
+                info.append(
+                    node('strong', '', employee.name),
+                    node('small', '', `${employee.id} · CL: ${balance.clTaken}/${balance.clEntitlement} used (${balance.clBalance} left) · EL: ${balance.elTaken}/${balance.elEntitlement} used (${balance.elBalance} left)`)
+                );
+                row.append(avatar(employee), info, tag(staffLabel(employee), staffType(employee)));
+                list.append(row);
+            });
+            return;
+        }
+        leaveRequests.forEach((request) => {
+            const employee = employeeFor(request.employeeId);
+            if (!employee) return;
+            const row = node('div', 'leave-row');
+            const info = node('div', 'leave-info');
+            info.append(node('strong', '', employee.name), node('small', '', `${request.type} · ${request.startDate} to ${request.endDate} · ${request.days} ${request.days === 1 ? 'day' : 'days'}`));
+            row.append(avatar(employee), info, tag(request.status, request.status === 'Pending' ? 'pending' : 'prepared'));
+            if (request.status === 'Pending') {
+                const approve = node('button', 'row-action', 'Approve');
+                approve.type = 'button';
+                approve.addEventListener('click', () => {
+                    request.status = 'Approved';
+                    renderLeaveRequests();
+                    byId('leave-pending').textContent = leaveRequests.filter((item) => item.status === 'Pending').length;
+                });
+                row.append(approve);
+            }
+            list.append(row);
+        });
+    }
+
+    function renderReports() {
+        const container = byId('company-summary');
+        container.replaceChildren();
+        if (Array.isArray(source.companyReports) && source.companyReports.length) {
+            source.companyReports.forEach((report) => {
+                const row = node('div', 'summary-line report-summary-line');
+                const details = node('span', 'report-summary-values');
+                details.append(
+                    node('span', '', `Gross ${report.grossSalary == null ? 'Review' : money(report.grossSalary)}`),
+                    node('span', '', `PF ${report.employeePf == null ? 'Review' : money(report.employeePf)}`),
+                    node('span', '', `ESI ${report.employeeEsi == null ? 'Review' : money(report.employeeEsi)}`),
+                    node('span', '', `Deductions ${report.totalDeductions == null ? 'Review' : money(report.totalDeductions)}`),
+                    node('span', '', `Net ${report.netPayable == null ? 'Review' : money(report.netPayable)}`)
+                );
+                row.append(node('strong', '', report.companyLabel), node('span', '', `${report.employees ?? 0} employees`), details);
+                container.append(row);
+            });
+            return;
+        }
+        companies.forEach((company) => {
+            const group = employees.filter((employee) => employee.companyId === company.id);
+            const summary = source.companyTotals?.find((item) => item.companyId === company.id);
+            const total = summary ? summary.grossSalary : group.reduce((sum, employee) => sum + employee.baseSalary, 0);
+            const row = node('div', 'summary-line');
+            row.append(
+                node('strong', '', company.name),
+                node('span', '', `${group.length} employees`),
+                node('strong', 'summary-line-amount', total == null ? 'Review source formulas' : money(total))
+            );
+            container.append(row);
+        });
+    }
+
+    function renderSettings() {
+        const container = byId('settings-companies');
+        container.replaceChildren();
+        companies.forEach((company, index) => {
+            const staff = employees.filter((employee) => employee.companyId === company.id);
+            const row = node('div', 'settings-company');
+            row.append(
+                node('span', `company-marker company-color-${index % 2}`, company.shortName[0]),
+                node('strong', '', company.name),
+                node('span', 'settings-company-count', `${staff.length} employees in source sheet`)
+            );
+            container.append(row);
+        });
+        byId('setting-pay-period').textContent = source.periodLabel || source.payrollPeriod || 'Not set';
+        byId('setting-calendar-days').textContent = source.calendarDays || 'Not set';
+    }
+
+    function exportCsv(filename, headers, rows) {
+        const escape = (value) => {
+            let text = String(value ?? '');
+            if (/^[\s]*[=+\-@]/.test(text)) text = `'${text}`;
+            return `"${text.replaceAll('"', '""')}"`;
+        };
+        const content = [headers, ...rows].map((row) => row.map(escape).join(',')).join('\r\n');
+        const blob = new Blob(['\uFEFF', content], { type: 'text/csv;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(link.href), 0);
+    }
+
+    function employeeCsvRows(list) {
+        return list.map((employee) => [
+            employee.id, employee.name, companyName(employee.companyId), employee.department,
+            employee.title, employee.ageAtJoining, staffLabel(employee), employee.status,
+            employee.joiningDate, employee.baseSalary
+        ]);
+    }
+
+    function openEmployeeDialog(employee = null) {
+        const form = byId('employee-form');
+        form.reset();
+        byId('form-error').hidden = true;
+        editingId = employee?.id ?? null;
+        byId('dialog-title').textContent = employee ? 'Edit employee' : 'Add employee';
+        byId('form-original-id').value = employee?.id ?? '';
+        byId('form-id').value = employee?.id ?? '';
+        byId('form-id').readOnly = Boolean(employee);
+        byId('form-name').value = employee?.name ?? '';
+        byId('form-company').value = employee?.companyId ?? companies[0]?.id ?? '';
+        byId('form-department').value = employee?.department ?? '';
+        byId('form-title').value = employee?.title ?? '';
+        byId('form-age').value = employee?.ageAtJoining ?? '';
+        byId('form-join-date').value = employee?.joiningDate ?? '';
+        byId('form-salary').value = employee?.baseSalary ?? '';
+        byId('form-status').value = employee?.status ?? 'active';
+        byId('employee-dialog').showModal();
+    }
+
+    function saveEmployee(event) {
+        event.preventDefault();
+        const id = byId('form-id').value.trim();
+        const existing = editingId ? employeeFor(editingId) : null;
+        if (!existing && employees.some((employee) => employee.id.toLowerCase() === id.toLowerCase())) {
+            byId('form-error').textContent = 'That employee ID is already in use. Choose a unique ID.';
+            byId('form-error').hidden = false;
+            return;
+        }
+        const name = byId('form-name').value.trim();
+        const ageAtJoining = Number(byId('form-age').value);
+        const baseSalary = Number(byId('form-salary').value);
+        if (!Number.isSafeInteger(baseSalary) || baseSalary <= 0 || !Number.isInteger(ageAtJoining) || ageAtJoining < 18 || ageAtJoining > 100) {
+            byId('form-error').textContent = 'Enter a valid whole-rupee monthly salary and an age between 18 and 100.';
+            byId('form-error').hidden = false;
+            return;
+        }
+        const record = {
+            id, name,
+            companyId: byId('form-company').value,
+            department: byId('form-department').value.trim(),
+            title: byId('form-title').value.trim(),
+            ageAtJoining,
+            joiningDate: byId('form-join-date').value,
+            baseSalary,
+            status: byId('form-status').value,
+            presentDays: existing?.presentDays ?? 0,
+            workingDays: existing?.workingDays ?? 22,
+            leaveUsed: existing?.leaveUsed ?? 0,
+            initials: initials(name),
+            color: existing?.color ?? colors[employees.length % colors.length]
+        };
+        if (existing) Object.assign(existing, record);
+        else employees.push(record);
+        byId('employee-dialog').close();
+        updateCompanyFilters();
+        renderAll();
+    }
+
+    function renderAll() {
+        renderDashboard();
+        renderEmployees();
+        renderPayrollSelection();
+        renderAttendance();
+        renderReports();
+        renderSettings();
+    }
+
+    function signOutOfPortal() {
+        appShell.hidden = true;
+        loginGate.hidden = false;
+        loginButton.disabled = false;
+        loginButton.textContent = 'Continue with Google';
+        loginMessage.textContent = 'You have signed out of Employees Pay Roll on this device. Sign in again to reload authorized payroll data. Your Google account remains signed in to Google.';
+        loginError.hidden = true;
+        selectedIds.clear();
+        employees = [];
+        payrollRuns = [];
+        ['employees', 'payrollRuns', 'companyReports', 'advances', 'leaveBalances', 'companyTotals', 'leaveRequests']
+            .forEach((key) => {
+                if (Array.isArray(source[key])) source[key].length = 0;
+                else source[key] = null;
+            });
+        source.userEmail = null;
+        currentRegisterPage = null;
+        byId('employee-detail-dialog').close();
+        document.querySelectorAll('#app-shell tbody').forEach((body) => body.replaceChildren());
+        byId('payroll-result').replaceChildren();
+        byId('register-head').replaceChildren();
+        byId('register-body').replaceChildren();
+        window.location.reload();
+    }
+
+    function showView(name) {
+        document.querySelectorAll('.view').forEach((view) => view.classList.toggle('active', view.id === `view-${name}`));
+        document.querySelectorAll('.nav-item[data-view]').forEach((button) => {
+            const isActive = button.dataset.view === name;
+            button.classList.toggle('active', isActive);
+            if (isActive) button.setAttribute('aria-current', 'page');
+            else button.removeAttribute('aria-current');
+        });
+        const view = byId(`view-${name}`);
+        byId('breadcrumb-current').textContent = view?.dataset.title ?? 'Overview';
+        document.querySelector('.main-content').scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    document.querySelectorAll('.nav-item[data-view]').forEach((button) => button.addEventListener('click', () => showView(button.dataset.view)));
+    document.querySelectorAll('[data-go]').forEach((button) => button.addEventListener('click', () => showView(button.dataset.go)));
+    byId('quick-add-employee').addEventListener('click', () => openEmployeeDialog());
+    document.querySelectorAll('#employee-company-filter, #employee-type-filter, #employee-status-filter')
+        .forEach((select) => select.addEventListener('change', renderEmployees));
+    byId('employee-search').addEventListener('input', renderEmployees);
+    document.querySelectorAll('#payroll-company-filter, #payroll-type-filter')
+        .forEach((select) => select.addEventListener('change', renderPayrollSelection));
+    byId('select-all-visible').addEventListener('change', () => {
+        filteredPayrollEmployees.forEach((employee) => {
+            if (byId('select-all-visible').checked) selectedIds.add(employee.id);
+            else selectedIds.delete(employee.id);
+        });
+        byId('payroll-result').hidden = true;
+        renderPayrollSelection();
+    });
+    byId('select-toggle').addEventListener('click', () => {
+        const select = filteredPayrollEmployees.some((employee) => !selectedIds.has(employee.id));
+        filteredPayrollEmployees.forEach((employee) => {
+            if (select) selectedIds.add(employee.id);
+            else selectedIds.delete(employee.id);
+        });
+        byId('payroll-result').hidden = true;
+        renderPayrollSelection();
+    });
+    byId('process-payroll').addEventListener('click', processPayroll);
+    byId('attendance-company-filter').addEventListener('change', renderAttendance);
+    byId('add-employee-button').addEventListener('click', () => openEmployeeDialog());
+    byId('employee-form').addEventListener('submit', saveEmployee);
+    document.querySelector('.dialog-close').addEventListener('click', () => byId('employee-dialog').close());
+    document.querySelector('.dialog-cancel').addEventListener('click', () => byId('employee-dialog').close());
+    byId('employee-dialog').addEventListener('click', (event) => {
+        if (event.target === byId('employee-dialog')) byId('employee-dialog').close();
+    });
+    byId('employee-detail-close').addEventListener('click', () => byId('employee-detail-dialog').close());
+    byId('employee-detail-dialog').addEventListener('click', (event) => {
+        if (event.target === byId('employee-detail-dialog')) byId('employee-detail-dialog').close();
+    });
+    byId('employee-detail-dialog').addEventListener('close', () => {
+        byId('employee-detail-fields').replaceChildren();
+        byId('employee-protected-fields').replaceChildren();
+        byId('employee-detail-feedback').hidden = true;
+    });
+    byId('logout-button').addEventListener('click', signOutOfPortal);
+    byId('account-button').addEventListener('click', () => {
+        if (isConnected) signOutOfPortal();
+    });
+    byId('register-select').addEventListener('change', () => loadRegisterPage(byId('register-select').value, 5));
+    byId('register-next').addEventListener('click', () => {
+        if (currentRegisterPage?.hasMore) loadRegisterPage(currentRegisterPage.sheetName, currentRegisterPage.nextStartRow);
+    });
+    byId('register-previous').addEventListener('click', () => {
+        loadRegisterPage(currentRegisterPage?.sheetName || byId('register-select').value, Math.max(5, currentRegisterStart - 100));
+    });
+    byId('export-register').addEventListener('click', () => {
+        if (!currentRegisterPage?.rows.length) return;
+        exportCsv(`employees-pay-roll-${currentRegisterPage.sheetName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-page.csv`,
+            ['Source row', ...currentRegisterPage.columns],
+            currentRegisterPage.rows.map((record) => [record.rowNumber, ...record.values]));
+    });
+    document.querySelector('.notice-close').addEventListener('click', (event) => event.currentTarget.closest('.notice-bar').remove());
+    byId('export-employees').addEventListener('click', () => exportCsv('employees-pay-roll-employee-directory-authorized.csv',
+        ['Employee ID', 'Name', 'Company', 'Department', 'Job title', 'Age at joining', 'Staff type', 'Status', 'Joining date', 'Monthly base salary INR'],
+        employeeCsvRows(filteredDirectoryEmployees)));
+    byId('export-directory-report').addEventListener('click', () => exportCsv('employees-pay-roll-employee-directory-authorized.csv',
+        ['Employee ID', 'Name', 'Company', 'Department', 'Job title', 'Age at joining', 'Staff type', 'Status', 'Joining date', 'Monthly base salary INR'],
+        employeeCsvRows(employees)));
+    byId('export-salary-report').addEventListener('click', () => exportCsv(
+        'employees-pay-roll-salary-summary-authorized.csv',
+        ['Company group', 'Employee count', 'Gross salary INR', 'Employee PF INR', 'Employee ESI INR', 'Total deductions INR', 'Net payable INR', 'Annual bonus estimate INR', 'Gratuity estimate INR', 'Annual TDS estimate INR'],
+        source.companyReports.map((report) => [report.companyLabel, report.employees, report.grossSalary, report.employeePf, report.employeeEsi, report.totalDeductions, report.netPayable, report.annualBonus, report.gratuityEstimate, report.annualTds])));
+    byId('export-runs-report').addEventListener('click', () => exportCsv('employees-pay-roll-payroll-runs-authorized.csv',
+        ['Run ID', 'Period', 'Company', 'Employee count', 'Base salary total INR', 'Status', 'Prepared date'],
+        payrollRuns.map((run) => [run.id, run.period, run.companyLabel || companyName(run.companyId), run.employeeIds.length, run.total, run.status, run.createdAt])));
+    byId('pay-period').addEventListener('change', () => {
+        const [year, month] = byId('pay-period').value.split('-').map(Number);
+        if (year && month) byId('top-period').textContent = new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year, month - 1, 1)));
+    });
+
+    updateCompanyFilters();
+    renderAll();
+    }
+
+    if (googleRun) {
+        appShell.hidden = true;
+        loginGate.hidden = false;
+        loginButton.addEventListener('click', () => {
+            loginButton.disabled = true;
+            loginButton.textContent = 'Verifying Google account…';
+            loginError.hidden = true;
+            google.script.run
+                .withSuccessHandler(initialize)
+                .withFailureHandler(showLoginError)
+                .getPortalData();
+        });
+    } else {
+        appShell.hidden = true;
+        loginGate.hidden = false;
+        loginButton.hidden = true;
+        loginMessage.textContent = 'Live payroll data is available only from the deployed Google Apps Script portal. This local page does not include employee records.';
+        loginError.hidden = true;
+    }
+})();
+
+</script>
+</body>
+</html>
