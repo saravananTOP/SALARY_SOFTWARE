@@ -4,7 +4,7 @@ A locally authenticated payroll portal for maintaining employee records, enterin
 
 ## Payroll portal
 
-The **Employees Pay Roll** portal supports **THE FLAVORS INDIA PVT LTD** and **THE SUPREME AROMATICS PVT LTD**, uses INR, and has no Google sign-in or Google Sheets runtime dependency. The supplied workbook is only a one-time migration source: the importer copies employee, attendance, settings, tax slabs, advances, and available payroll history into SQLite. The portal calculates and reads payroll data from SQLite after import.
+The **Employees Payroll** portal supports **THE FLAVORS INDIA PVT LTD** and **THE SUPREME AROMATICS PVT LTD**, uses INR, and has no Google sign-in or Google Sheets runtime dependency. The supplied workbook is only a one-time migration source: the importer copies employee, attendance, settings, tax slabs, advances, and available payroll history into SQLite. The portal calculates and reads payroll data from SQLite after import.
 
 The portal provides a local email/password sign-in, employee directory, attendance and leave inputs, selected-employee payroll previews, reports, and paginated employee, leave, attendance, advances, salary, PF, ESI, bonus, gratuity, TDS, payslip, and history registers. Sensitive employee fields are masked server-side. Administrators can reveal protected values, review ESI coverage, and use the **Source data review** screen to enter and verify missing salary and leave data. Each correction is audited; payroll preview and archive remain blocked until required active employee data is complete. Administrators and payroll users can update attendance and archive periods; read-only users cannot write. There is no public account registration or bank-payment integration.
 
@@ -20,8 +20,25 @@ Administrators can add, update, or close employee advances and school loans in *
 2. In `salary-processing/server/`, run `npm install`.
 3. Copy `.env.example` to `.env` and set a random `SESSION_SECRET` with at least 32 characters and the exact `APP_ORIGIN` used to open the portal. `DATABASE_PATH` defaults to `./data/portal.sqlite`.
 4. Create the first administrator with `npm run users -- create admin@example.com admin`. The CLI prompts for a password without echoing it.
-5. Import a synthetic or approved `.xlsx` source file and its validated leave-balance CSV as described below.
-6. Run `npm test`, then start the local portal with `npm start`. It listens on `127.0.0.1:3000` by default.
+5. Issue a recovery key for each account with `npm run users -- recovery-key admin@example.com`. The CLI shows the key once; give it to the account holder through a secure channel and have them store it securely. Issuing another key replaces the previous key.
+6. Import a synthetic or approved `.xlsx` source file and its validated leave-balance CSV as described below.
+7. Run `npm test`, then start the local portal with `npm start`. It listens on `127.0.0.1:3000` by default.
+
+Users can select **Forgot password?** and enter their account email, administrator-issued recovery key, and new password. Recovery keys are high-entropy, stored only as hashes, allowed five incorrect attempts, and invalidated after a successful reset. A successful reset revokes existing sessions. Issue a new recovery key after a reset for future use. The key is displayed only once by the local CLI; do not commit it or send it over an untrusted channel.
+
+### Portable local launcher (Windows)
+
+Move or copy the complete `salary-processing` folder to the Windows computer where the portal should run, install Node.js 20 or newer on that computer, then run `Start-Portal.ps1` from the folder. The launcher resolves paths relative to its own location, creates a local `.env` with a random session secret if needed, installs locked dependencies if absent, starts the server, and opens the browser. The portal and SQLite database remain on that computer; `http://127.0.0.1:3000` is not reachable from other computers or the public internet. Keep the generated `.env` and `server/data/portal.sqlite` private and back them up securely. To create the first administrator, follow the account setup command above in `salary-processing/server/`.
+
+```powershell
+.\Start-Portal.ps1
+```
+
+If PowerShell blocks local scripts, run it for this invocation without changing the machine-wide execution policy:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Start-Portal.ps1
+```
 
 ### One-time workbook migration
 
@@ -41,6 +58,7 @@ Install Node.js 20+ on the target Windows or Linux server, copy the application,
 Local accounts are managed from `salary-processing/server/`:
 
 - Create: `npm run users -- create <email> <admin|payroll|read-only>`
+- Issue or replace a one-time password recovery key: `npm run users -- recovery-key <email>` (the key is displayed once)
 - Reset a password: `npm run users -- reset-password <email>`
 - Change a role: `npm run users -- set-role <email> <admin|payroll|read-only>`
 - Disable an account: `npm run users -- disable <email>`

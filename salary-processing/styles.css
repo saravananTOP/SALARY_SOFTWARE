@@ -296,6 +296,20 @@ input[type="checkbox"] { width: 14px; height: 14px; margin: 0; accent-color: #66
 .employee-dialog { width: min(520px, calc(100% - 28px)); max-height: min(90vh, 780px); overflow-y: auto; padding: 0; border: 1px solid #e8e8ef; border-radius: 12px; background: #fff; box-shadow: 0 20px 70px #25243b33; }
 .employee-dialog::backdrop { background: #1f20364d; backdrop-filter: blur(2px); }
 .employee-dialog form { padding: 21px; }
+.account-dialog-content { padding: 21px; }
+.account-details { display: grid; gap: 12px; margin: 0; }
+.account-details div { padding: 11px; border: 1px solid #eceef4; border-radius: 7px; }
+.account-details dt { color: #84879c; font-size: 9px; }
+.account-details dd { margin: 4px 0 0; color: #34364c; font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+.login-reset-link { margin-top: 12px; font-size: 10px; }
+.password-reset-panel { margin-top: 16px; text-align: left; }
+.password-reset-panel h2 { margin: 0; color: #25273e; font-size: 18px; }
+.password-reset-panel .login-message { margin: 8px 0 14px; }
+.password-reset-panel .login-reset-link { display: block; margin: 16px auto 0; }
+.password-reset-panel form[hidden] { display: none; }
+.reset-success { color: #287a55; }
+.reset-success, .reset-error { margin: 12px 0 0; padding: 10px; border: 1px solid #e1e8e2; border-radius: 6px; font-size: 10px; line-height: 1.5; }
+.reset-error { border-color: #f1dddd; background: #fff8f8; color: #9b4545; }
 .dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 17px; }
 .dialog-heading h2 { margin: 0; color: #34364c; font-size: 17px; }
 .dialog-heading p:last-child { margin: 5px 0 0; color: #9293a3; font-size: 9px; }

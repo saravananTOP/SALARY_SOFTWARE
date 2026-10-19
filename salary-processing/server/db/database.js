@@ -15,6 +15,7 @@ function createDatabase(databasePath = process.env.DATABASE_PATH || path.join(__
     database.pragma('busy_timeout = 5000');
     database.pragma('foreign_keys = ON');
     database.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
+    database.exec('DROP TABLE IF EXISTS portal_password_reset_codes');
     const employeeColumns = new Set(
         database.prepare('PRAGMA table_info(payroll_employees)').all().map((column) => column.name)
     );

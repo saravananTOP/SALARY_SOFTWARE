@@ -7,6 +7,7 @@
     const loginButton = document.getElementById('login-button');
     const loginMessage = document.getElementById('login-message');
     const loginError = document.getElementById('login-error');
+    const passwordResetPanel = document.getElementById('password-reset-panel');
     let csrfToken = null;
 
     async function apiRequest(url, options = {}) {
@@ -31,11 +32,37 @@
     function showLoginError(error) {
         appShell.hidden = true;
         loginGate.hidden = false;
+        loginError.className = 'login-error';
+        loginForm.hidden = false;
+        loginMessage.hidden = false;
+        document.getElementById('forgot-password-button').hidden = false;
+        passwordResetPanel.hidden = true;
         loginButton.disabled = false;
         loginButton.textContent = 'Sign in';
         loginMessage.textContent = 'Use the local account provided by your payroll portal administrator.';
         loginError.textContent = error?.message || 'The portal could not load payroll data. No employee data was displayed.';
         loginError.hidden = false;
+    }
+
+    function showPasswordReset(email) {
+        loginForm.hidden = true;
+        loginMessage.hidden = true;
+        document.getElementById('forgot-password-button').hidden = true;
+        passwordResetPanel.hidden = false;
+        document.getElementById('password-reset-form').reset();
+        document.getElementById('reset-email').value = email.trim().toLowerCase();
+        document.getElementById('password-reset-feedback').hidden = true;
+        loginError.hidden = true;
+        document.getElementById('reset-email').focus();
+    }
+
+    function showSignIn() {
+        passwordResetPanel.hidden = true;
+        loginForm.hidden = false;
+        loginMessage.hidden = false;
+        document.getElementById('forgot-password-button').hidden = false;
+        document.getElementById('password-reset-feedback').hidden = true;
+        loginError.hidden = true;
     }
 
     function initialize(source) {
@@ -209,17 +236,20 @@
             byId('workspace-status').textContent = 'Local account signed in';
             byId('logout-button').hidden = false;
             byId('account-button').textContent = initials(source.userEmail || 'User');
-            byId('account-button').title = 'Sign out of the payroll portal';
-            byId('account-button').setAttribute('aria-label', 'Sign out of Employees Pay Roll');
             byId('logout-button').title = 'Signs out of the payroll portal';
             byId('profile-email').textContent = source.userEmail || 'Portal account';
-            document.querySelector('.profile-name small').textContent = ({
+            const roleName = ({
                 admin: 'Portal administrator',
                 payroll: 'Payroll user',
                 'read-only': 'Read-only user'
             })[source.userRole] || 'Local account';
+            document.querySelector('.profile-name small').textContent = roleName;
             document.querySelector('.profile-avatar').textContent = initials(source.userEmail || 'User');
-            document.querySelector('.profile-more').hidden = true;
+            byId('account-dialog-email').textContent = source.userEmail || 'Portal account';
+            byId('account-dialog-role').textContent = roleName;
+            byId('account-button').title = `View account details for ${source.userEmail || 'your account'}`;
+            byId('account-button').setAttribute('aria-label', 'View account details');
+            document.querySelector('.profile-more').hidden = false;
             document.querySelector('#view-dashboard .welcome-row h1').textContent = 'Payroll overview';
             document.querySelector('#view-dashboard .welcome-row .eyebrow').textContent = 'CURRENT PAYROLL PERIOD · WORKSPACE OVERVIEW';
             document.querySelector('.quick-actions #quick-add-employee').hidden = true;
@@ -230,7 +260,7 @@
             document.querySelector('#view-dashboard .payroll-overview .panel-title-row p').textContent = 'Current gross salary by company';
             document.querySelector('#view-dashboard .chart-caption').lastChild.textContent = ' Gross salary';
             document.querySelector('#view-dashboard .recent-panel .panel-title-row p').textContent =
-                'Archived payroll history stored in SQLite';
+                'Archived payroll history stored in the portal';
             document.querySelector('#view-dashboard .notice-bar span:nth-child(2)').textContent =
                 'Payroll records and calculations are stored locally in SQLite. Payroll previews do not initiate payments.';
             document.querySelector('#view-employees .subheading').textContent =
@@ -1440,7 +1470,8 @@
         renderAdvances();
     }
 
-    async function signOutOfPortal() {
+    async function signOutOfPortal(resetEmail = '') {
+        if (byId('account-dialog').open) byId('account-dialog').close();
         appShell.hidden = true;
         loginGate.hidden = false;
         loginButton.disabled = true;
@@ -1448,7 +1479,12 @@
         try {
             await apiRequest('/api/logout', { method: 'POST' });
             csrfToken = null;
-            window.location.reload();
+            if (resetEmail) {
+                document.getElementById('login-email').value = resetEmail;
+                showPasswordReset(resetEmail);
+            } else {
+                window.location.reload();
+            }
         } catch (error) {
             showLoginError(error);
         }
@@ -1570,9 +1606,17 @@
         byId('employee-protected-fields').replaceChildren();
         byId('employee-detail-feedback').hidden = true;
     });
-    byId('logout-button').addEventListener('click', signOutOfPortal);
-    byId('account-button').addEventListener('click', () => {
-        if (isConnected) signOutOfPortal();
+    byId('logout-button').addEventListener('click', () => signOutOfPortal());
+    byId('account-button').addEventListener('click', () => byId('account-dialog').showModal());
+    byId('profile-options-button').addEventListener('click', () => byId('account-dialog').showModal());
+    byId('account-dialog-close').addEventListener('click', () => byId('account-dialog').close());
+    byId('account-dialog').addEventListener('click', (event) => {
+        if (event.target === byId('account-dialog')) byId('account-dialog').close();
+    });
+    byId('account-sign-out').addEventListener('click', () => signOutOfPortal());
+    byId('account-reset-password').addEventListener('click', () => {
+        const email = byId('account-dialog-email').textContent;
+        signOutOfPortal(email);
     });
     byId('register-select').addEventListener('change', () => loadRegisterPage(byId('register-select').value, 5));
     byId('register-next').addEventListener('click', () => {
@@ -1634,6 +1678,51 @@
         } catch (error) {
             document.getElementById('login-password').value = '';
             showLoginError(error);
+        }
+    });
+
+    document.getElementById('forgot-password-button').addEventListener('click', () => {
+        showPasswordReset(document.getElementById('login-email').value);
+    });
+    document.getElementById('back-to-sign-in-button').addEventListener('click', showSignIn);
+    document.getElementById('password-reset-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const button = document.getElementById('complete-reset-button');
+        const feedback = document.getElementById('password-reset-feedback');
+        const password = document.getElementById('reset-new-password').value;
+        const confirmPassword = document.getElementById('reset-confirm-password').value;
+        feedback.hidden = true;
+        if (password !== confirmPassword) {
+            feedback.className = 'reset-error';
+            feedback.textContent = 'The new passwords do not match.';
+            feedback.hidden = false;
+            return;
+        }
+        button.disabled = true;
+        try {
+            await apiRequest('/api/password-reset/complete', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: document.getElementById('reset-email').value.trim().toLowerCase(),
+                    recoveryKey: document.getElementById('reset-recovery-key').value.trim(),
+                    password
+                })
+            });
+            const email = document.getElementById('reset-email').value.trim().toLowerCase();
+            form.reset();
+            document.getElementById('login-email').value = email;
+            document.getElementById('login-password').value = '';
+            showSignIn();
+            loginError.className = 'login-error reset-success';
+            loginError.textContent = 'Your password was reset. Sign in with your new password.';
+            loginError.hidden = false;
+        } catch (error) {
+            feedback.className = 'reset-error';
+            feedback.textContent = error.message || 'Your password could not be reset.';
+            feedback.hidden = false;
+        } finally {
+            button.disabled = false;
         }
     });
 

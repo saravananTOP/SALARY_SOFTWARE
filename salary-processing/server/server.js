@@ -12,6 +12,7 @@ const bcrypt = require('bcryptjs');
 const { rateLimit } = require('express-rate-limit');
 const helmet = require('helmet');
 const { createDatabase } = require('./db/database');
+const { createPasswordRecoveryService } = require('./lib/password-recovery');
 const {
     AttendanceImportError,
     archivePayroll,
@@ -38,6 +39,7 @@ const database = createDatabase();
 const sessionStore = new SqliteSessionStore(database);
 const portalRoot = path.resolve(__dirname, '..');
 const sessionSecret = process.env.SESSION_SECRET || '';
+const passwordRecoveryService = createPasswordRecoveryService(database);
 const appOrigin = process.env.APP_ORIGIN || '';
 const cookieSecure = appOrigin.startsWith('https://');
 const production = process.env.NODE_ENV === 'production';
@@ -251,6 +253,14 @@ const loginLimiter = rateLimit({
     message: { error: 'Too many sign-in attempts. Wait a while and try again.' }
 });
 
+const passwordResetCompleteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'Too many password reset attempts. Wait a while and try again.' }
+});
+
 app.get('/api/session', requireUser, (req, res) => {
     if (!req.session.csrfToken) req.session.csrfToken = crypto.randomBytes(32).toString('hex');
     res.json({
@@ -289,6 +299,20 @@ app.post('/api/login', requireSameOrigin, loginLimiter, asyncRoute(async (req, r
         user: { id: user.id, email: user.email, role: user.role },
         csrfToken: req.session.csrfToken
     });
+}));
+
+app.post('/api/password-reset/complete', requireSameOrigin, passwordResetCompleteLimiter, asyncRoute(async (req, res) => {
+    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const recoveryKey = typeof req.body.recoveryKey === 'string' ? req.body.recoveryKey : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254
+        || !/^[A-Za-z0-9_-]{43}$/.test(recoveryKey) || password.length < 12 || password.length > 1024) {
+        return res.status(400).json({ error: 'Enter a valid email, recovery key, and password of at least 12 characters.' });
+    }
+    if (!await passwordRecoveryService.resetPassword(email, recoveryKey, password)) {
+        return res.status(400).json({ error: 'The recovery key is invalid or has already been used.' });
+    }
+    res.json({ message: 'Your password was reset. Sign in with your new password.' });
 }));
 
 app.post('/api/logout', requireSameOrigin, requireUser, csrfProtection, asyncRoute(async (req, res) => {

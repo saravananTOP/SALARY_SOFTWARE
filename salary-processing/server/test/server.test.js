@@ -7,6 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
 const ExcelJS = require('exceljs');
+const { generateRecoveryKey, hashRecoveryKey } = require('../lib/password-recovery');
 
 const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'salary-portal-server-test-'));
 process.env.DATABASE_PATH = path.join(temporaryDirectory, 'portal.sqlite');
@@ -17,6 +18,7 @@ process.env.NODE_ENV = 'test';
 const { app, database, sessionStore } = require('../server');
 let server;
 let baseUrl;
+const recoveryKey = generateRecoveryKey();
 
 test.before(async () => {
     const passwordHash = await bcrypt.hash('synthetic-test-password-123', 4);
@@ -27,6 +29,14 @@ test.before(async () => {
     database.prepare(
         'INSERT INTO portal_users (email, password_hash, role) VALUES (?, ?, ?)'
     ).run('admin@example.test', adminPasswordHash, 'admin');
+    const recoveryPasswordHash = await bcrypt.hash('synthetic-recovery-password-123', 4);
+    const recoveryUser = database.prepare(
+        'INSERT INTO portal_users (email, password_hash, role) VALUES (?, ?, ?)'
+    ).run('recovery@example.test', recoveryPasswordHash, 'payroll');
+    database.prepare(`
+        INSERT INTO portal_password_recovery_keys (user_id, key_hash, attempts, created_at)
+        VALUES (?, ?, 0, ?)
+    `).run(Number(recoveryUser.lastInsertRowid), hashRecoveryKey(recoveryKey), Date.now());
     database.prepare(
         'INSERT INTO payroll_companies (id, name, short_name) VALUES (?, ?, ?)'
     ).run('synthetic-company', 'Synthetic Company', 'Synthetic');
@@ -80,11 +90,70 @@ test('portal serves the local sign-in page and rejects unauthenticated data requ
     const page = await pageResponse.text();
     assert.equal(pageResponse.status, 200);
     assert.match(page, /Sign in to your portal/);
+    assert.match(page, /Forgot password\?/);
+    assert.match(page, /Employees Payroll/);
     assert.doesNotMatch(page, /Sign in with Google|Continue with Google|Google OAuth/);
 
     const dataResponse = await fetch(`${baseUrl}/api/portal-data`);
     assert.equal(dataResponse.status, 401);
     assert.equal((await dataResponse.json()).error, 'Sign in to continue.');
+});
+
+test('password recovery validates account email and key without accepting the removed OTP endpoint', async () => {
+    const invalidResponse = await fetch(`${baseUrl}/api/password-reset/request`, {
+        method: 'POST',
+        headers: { Origin: process.env.APP_ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'not-an-email' })
+    });
+    assert.equal(invalidResponse.status, 404);
+
+    const invalidKeyResponse = await fetch(`${baseUrl}/api/password-reset/complete`, {
+        method: 'POST',
+        headers: { Origin: process.env.APP_ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: 'admin@example.test',
+            recoveryKey: 'not-a-recovery-key',
+            password: 'synthetic-new-password-456'
+        })
+    });
+    assert.equal(invalidKeyResponse.status, 400);
+
+    const completeResponse = await fetch(`${baseUrl}/api/password-reset/complete`, {
+        method: 'POST',
+        headers: { Origin: process.env.APP_ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: 'admin@example.test',
+            recoveryKey: 'a'.repeat(43),
+            password: 'short'
+        })
+    });
+    assert.equal(completeResponse.status, 400);
+
+    const resetResponse = await fetch(`${baseUrl}/api/password-reset/complete`, {
+        method: 'POST',
+        headers: { Origin: process.env.APP_ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: 'recovery@example.test',
+            recoveryKey,
+            password: 'synthetic-recovery-password-456'
+        })
+    });
+    assert.equal(resetResponse.status, 200);
+    assert.match((await resetResponse.json()).message, /password was reset/i);
+    const updatedUser = database.prepare(
+        'SELECT password_hash FROM portal_users WHERE email = ?'
+    ).get('recovery@example.test');
+    assert.equal(await bcrypt.compare('synthetic-recovery-password-456', updatedUser.password_hash), true);
+    const reusedKeyResponse = await fetch(`${baseUrl}/api/password-reset/complete`, {
+        method: 'POST',
+        headers: { Origin: process.env.APP_ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: 'recovery@example.test',
+            recoveryKey,
+            password: 'synthetic-recovery-password-789'
+        })
+    });
+    assert.equal(reusedKeyResponse.status, 400);
 });
 
 test('local login issues a session and read-only accounts cannot reveal or update payroll data', async () => {

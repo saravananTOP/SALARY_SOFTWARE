@@ -6,6 +6,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const readline = require('node:readline');
 const bcrypt = require('bcryptjs');
 const { createDatabase, deleteUserSessions } = require('../db/database');
+const { generateRecoveryKey, hashRecoveryKey } = require('../lib/password-recovery');
 
 const roles = new Set(['admin', 'payroll', 'read-only']);
 
@@ -99,6 +100,29 @@ async function main() {
             console.log(`Updated password for ${email}.`);
             return;
         }
+        if (action === 'recovery-key') {
+            const user = database.prepare(
+                'SELECT id FROM portal_users WHERE email = ? AND disabled_at IS NULL'
+            ).get(email);
+            if (!user) throw new Error('No active account exists for that email.');
+            const recoveryKey = generateRecoveryKey();
+            database.transaction(() => {
+                database.prepare(`
+                    INSERT INTO portal_password_recovery_keys (user_id, key_hash, attempts, created_at)
+                    VALUES (?, ?, 0, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        key_hash = excluded.key_hash,
+                        attempts = 0,
+                        created_at = excluded.created_at
+                `).run(user.id, hashRecoveryKey(recoveryKey), Date.now());
+                database.prepare(
+                    'INSERT INTO portal_audit_log (user_id, user_email, action, target) VALUES (?, ?, ?, ?)'
+                ).run(user.id, email, 'account-recovery-key-issued', email);
+            })();
+            console.log(`Recovery key for ${email} (shown once; store it somewhere secure):`);
+            console.log(recoveryKey);
+            return;
+        }
         if (action === 'disable') {
             database.transaction(() => {
                 const user = database.prepare(
@@ -146,7 +170,7 @@ async function main() {
             console.log(`Changed ${email} to ${role}; the user must sign in again.`);
             return;
         }
-        throw new Error('Usage: npm run users -- list | create <email> <role> | reset-password <email> | disable <email> | set-role <email> <role>');
+        throw new Error('Usage: npm run users -- list | create <email> <role> | reset-password <email> | recovery-key <email> | disable <email> | set-role <email> <role>');
     } finally {
         database.close();
     }
